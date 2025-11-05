@@ -1,0 +1,167 @@
+
+   ╔═══════════════════════════════════════════════════════════════╗
+   ║                                                               ║
+   ║            🚀 GitLab CI/CD Creator CLI 🚀                     ║
+   ║                                                               ║
+   ║    Automatiza la creación de pipelines CI/CD en GitLab       ║
+   ║         para despliegues en Kubernetes                        ║
+   ║                                                               ║
+   ╚═══════════════════════════════════════════════════════════════╝
+
+
+📦 PROYECTO COMPLETAMENTE CONFIGURADO ✅
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 ESTADÍSTICAS:
+   • Líneas de código Python: 1,248+
+   • Módulos principales: 5
+   • Tests unitarios: 5 archivos
+   • Plantillas Jinja2: 5
+   • Documentos: 7
+   • Comandos CLI: 5
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 COMANDOS PRINCIPALES:
+
+   1. gitlab-cicd init
+      └─ Configura credenciales de GitLab
+
+   2. gitlab-cicd create <proyecto>
+      └─ Genera CI/CD completo
+
+   3. gitlab-cicd status <proyecto>
+      └─ Ver estado de pipelines
+
+   4. gitlab-cicd set-variable <proyecto> <key> <value>
+      └─ Gestionar variables CI/CD
+
+   5. gitlab-cicd list-templates
+      └─ Listar plantillas disponibles
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🚀 INICIO RÁPIDO (3 PASOS):
+
+   Paso 1: Instalar
+   ─────────────────
+   $ ./install.sh
+   
+   Paso 2: Activar entorno
+   ────────────────────────
+   $ source venv/bin/activate
+   
+   Paso 3: Configurar
+   ──────────────────
+   $ gitlab-cicd init
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 EJEMPLO DE USO:
+
+   # Crear CI/CD para un proyecto
+   $ gitlab-cicd create mi-grupo/mi-proyecto \
+       --k8s-cluster production \
+       --namespace mi-app-prod \
+       --environment prod
+
+   # Ver el estado
+   $ gitlab-cicd status mi-grupo/mi-proyecto
+
+   # Configurar una variable secreta
+   $ gitlab-cicd set-variable mi-grupo/mi-proyecto \
+       DATABASE_PASSWORD "mi-secreto" --masked
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 DOCUMENTACIÓN:
+
+   📖 README.md ................. Documentación principal
+   🚀 QUICKSTART.md ............. Inicio rápido
+   📝 NEXT_STEPS.md ............. Próximos pasos detallados
+   📊 PROJECT_SUMMARY.md ........ Resumen del proyecto
+   ⚙️  docs/TEMPLATE_REPO_SETUP.md  Configurar repo de plantillas (IMPORTANTE)
+   📘 docs/USAGE.md ............. Guía completa de uso
+   🤝 docs/CONTRIBUTING.md ...... Guía de contribución
+   📜 CHANGELOG.md .............. Historial de cambios
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🛠️  COMANDOS DE DESARROLLO:
+
+   make install-dev ............ Instalar con deps de desarrollo
+   make test ................... Ejecutar tests
+   make test-cov ............... Tests con cobertura
+   make lint ................... Ejecutar linters
+   make format ................. Formatear código
+   make clean .................. Limpiar archivos temporales
+   make help ................... Ver todos los comandos
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✨ CARACTERÍSTICAS:
+
+   ✅ CLI completo e interactivo
+   ✅ Integración completa con GitLab API
+   ✅ Plantillas personalizables (Jinja2)
+   ✅ Soporte para Kubernetes
+   ✅ Gestión de variables CI/CD
+   ✅ Multi-ambiente (dev/staging/prod)
+   ✅ Tests unitarios completos
+   ✅ UI rica en terminal (colors, prompts)
+   ✅ Configuración persistente
+   ✅ Documentación completa
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔧 TECNOLOGÍAS UTILIZADAS:
+
+   • Python 3.8+
+   • Click (CLI framework)
+   • python-gitlab (GitLab API)
+   • Jinja2 (templating)
+   • Rich (terminal UI)
+   • pytest (testing)
+   • black, flake8, mypy (code quality)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 ESTRUCTURA DEL PROYECTO:
+
+   gitlab-repo-cicd-creator-cli/
+   ├── src/gitlab_cicd_creator/    # Código fuente
+   │   ├── cli.py                  # CLI principal
+   │   ├── gitlab_client.py        # Cliente GitLab
+   │   ├── template_manager.py     # Gestor plantillas
+   │   ├── k8s_generator.py        # Generador K8s
+   │   └── config.py               # Configuración
+   ├── tests/                      # Tests unitarios
+   └── docs/                       # Documentación
+
+   NOTA: Las plantillas se cargan desde tu repositorio GitLab,
+         no hay plantillas locales.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔍 VERIFICAR SETUP:
+
+   $ ./verify_setup.sh
+
+   Este script verifica que todo esté correctamente instalado.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📞 SOPORTE:
+
+   🐛 Issues: https://github.com/ikerztipot/gitlab-repo-cicd-creator-cli/issues
+   📧 Email:  your.email@example.com
+   💬 Docs:   README.md y docs/
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   ⭐ ¡Disfruta automatizando tus despliegues! ⭐
+
+   Made with ❤️  for the DevOps community
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

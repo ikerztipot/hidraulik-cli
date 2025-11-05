@@ -1,0 +1,83 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gitlab-cicd-creator"
+version = "0.3.0"
+description = "CLI para generar CI/CD automáticamente en repositorios de GitLab para Kubernetes"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+keywords = ["gitlab", "cicd", "kubernetes", "cli", "devops", "automation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Build Tools",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+
+dependencies = [
+    "click>=8.0.0",
+    "python-gitlab>=3.15.0",
+    "pyyaml>=6.0",
+    "jinja2>=3.1.0",
+    "python-dotenv>=1.0.0",
+    "rich>=13.0.0",
+    "requests>=2.31.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.7.0",
+    "flake8>=6.1.0",
+    "mypy>=1.5.0",
+    "isort>=5.12.0",
+]
+
+[project.scripts]
+gitlab-cicd = "gitlab_cicd_creator.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/ikerztipot/gitlab-repo-cicd-creator-cli"
+Documentation = "https://github.com/ikerztipot/gitlab-repo-cicd-creator-cli/blob/main/README.md"
+Repository = "https://github.com/ikerztipot/gitlab-repo-cicd-creator-cli"
+Issues = "https://github.com/ikerztipot/gitlab-repo-cicd-creator-cli/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --cov=gitlab_cicd_creator --cov-report=term-missing --cov-report=html"
