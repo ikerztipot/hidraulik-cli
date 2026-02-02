@@ -1,45 +1,56 @@
 # Inicio Rápido - GitLab CI/CD Creator
 
-## Instalación en 3 Pasos
+## Instalación en 2 Pasos ⚡
 
-### 1. Instalar
+### 1. Descargar e Instalar
 ```bash
+git clone https://github.com/ikerztipot/gitlab-repo-cicd-creator-cli.git
+cd gitlab-repo-cicd-creator-cli
 ./install.sh
-# o manualmente:
-python -m venv venv
-source venv/bin/activate
-pip install -e .
 ```
+
+**Eso es todo!** El comando `gitlab-cicd` estará disponible globalmente.
+
+> 💡 **Nota:** Si el comando no funciona inmediatamente, cierra y abre tu terminal.
 
 ### 2. Configurar
 ```bash
-source venv/bin/activate
 gitlab-cicd init
 ```
 
 Proporciona:
 - URL de GitLab (ej: `https://gitlab.com`)
-- Token de acceso personal (créalo en GitLab → Settings → Access Tokens)
+- Token de acceso personal ([créalo aquí](https://gitlab.com/-/profile/personal_access_tokens))
 - **Repositorio de plantillas** (ej: `grupo/plantillas-cicd`) - **OBLIGATORIO**
 
 ⚠️ **Importante**: Debes tener un repositorio en GitLab con las plantillas antes de continuar.
+Ver [guía de configuración de plantillas](docs/TEMPLATE_REPO_SETUP.md).
 
-### 3. Usar
+---
+
+## Uso Básico
+
+### Crear CI/CD para un proyecto
 ```bash
-# Crear CI/CD para un proyecto
 gitlab-cicd create mi-grupo/mi-proyecto \
   --k8s-cluster mi-cluster \
   --namespace mi-app-prod \
   --environment prod
+```
 
-# Ver estado
+### Ver estado
+```bash
 gitlab-cicd status mi-grupo/mi-proyecto
+```
 
-# Configurar variable
+### Configurar variable
+```bash
 gitlab-cicd set-variable mi-grupo/mi-proyecto \
   DATABASE_URL "postgresql://..." \
   --masked
 ```
+
+---
 
 ## Ejemplos Prácticos
 

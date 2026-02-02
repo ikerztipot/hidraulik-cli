@@ -5,12 +5,12 @@ CLI principal para GitLab CI/CD Creator
 import click
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Prompt, Confirm
+from rich.prompt import Confirm, Prompt
 
 from .config import Config
 from .gitlab_client import GitLabClient
-from .template_manager import TemplateManager
 from .k8s_generator import K8sGenerator
+from .template_manager import TemplateManager
 
 console = Console()
 

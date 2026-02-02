@@ -20,28 +20,58 @@ Un CLI potente y flexible para generar automáticamente configuraciones de CI/CD
 
 ## 🔧 Instalación
 
-### Desde el código fuente
+### Instalación Rápida (Recomendada)
 
 ```bash
-# Clonar el repositorio
+# 1. Clonar el repositorio
 git clone https://github.com/ikerztipot/gitlab-repo-cicd-creator-cli.git
 cd gitlab-repo-cicd-creator-cli
 
-# Crear entorno virtual
-python -m venv venv
-source venv/bin/activate  # En Windows: venv\Scripts\activate
-
-# Instalar dependencias
-pip install -e .
-
-# O instalar con dependencias de desarrollo
-pip install -e ".[dev]"
+# 2. Ejecutar el instalador
+./install.sh
 ```
 
-### Usando pip (cuando esté publicado)
+El instalador automáticamente:
+- ✅ Detecta tu sistema operativo
+- ✅ Instala las dependencias necesarias
+- ✅ Hace que `gitlab-cicd` esté disponible globalmente
+
+**Nota:** Es posible que tengas que cerrar y abrir tu terminal después de la instalación.
+
+### Instalación Manual
+
+<details>
+<summary>Click para ver opciones de instalación manual</summary>
+
+#### Opción 1: Con pipx (recomendado para CLIs)
+```bash
+# Instalar pipx
+brew install pipx  # macOS
+# o
+python3 -m pip install --user pipx  # Linux
+
+# Instalar gitlab-cicd-creator
+pipx install .
+```
+
+#### Opción 2: Con pip (instalación de usuario)
+```bash
+pip install --user .
+```
+
+#### Opción 3: Entorno virtual (desarrollo)
+```bash
+python -m venv venv
+source venv/bin/activate  # En Windows: venv\Scripts\activate
+pip install -e .
+```
+
+</details>
+
+### Desinstalación
 
 ```bash
-pip install gitlab-cicd-creator
+./uninstall.sh
 ```
 
 ## 🎯 Uso Rápido
