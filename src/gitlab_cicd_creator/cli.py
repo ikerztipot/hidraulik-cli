@@ -3,6 +3,7 @@ CLI principal para GitLab CI/CD Creator
 """
 
 import click
+import gitlab
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
@@ -69,6 +70,20 @@ def init(gitlab_url, token, template_repo):
         user = client.get_current_user()
         console.print(f"[green]✓[/green] Conectado como: {user['username']}")
         
+        # Verificar el tipo y alcance del token
+        console.print("\n[bold]Verificando permisos del token...[/bold]")
+        try:
+            # Intentar listar proyectos del usuario para verificar alcance del token
+            test_projects = client.gl.projects.list(membership=True, per_page=1, get_all=False)
+            if test_projects:
+                console.print(f"[green]✓[/green] Token con acceso a proyectos del usuario/grupo")
+            else:
+                console.print("[yellow]⚠[/yellow] Advertencia: El token parece tener alcance limitado")
+        except Exception as e:
+            console.print(f"[yellow]⚠[/yellow] Advertencia: Token con permisos limitados - {str(e)}")
+            console.print("[yellow]⚠[/yellow] Si es un Project Access Token, solo funcionará con el repo de plantillas")
+            console.print("[yellow]⚠[/yellow] Recomendado: Usar un Personal Access Token con scope 'api' o 'write_repository'")
+        
         # Verificar que el repositorio de plantillas existe
         console.print(f"\nVerificando repositorio de plantillas: {template_repo}")
         try:
@@ -90,6 +105,24 @@ def init(gitlab_url, token, template_repo):
             console.print("  • La ruta del repositorio es correcta (formato: grupo/proyecto)")
             console.print("  • Tienes permisos de lectura en el repositorio")
             console.print("  • El repositorio existe y contiene plantillas .j2")
+            
+            # Intentar buscar proyectos similares
+            console.print("\n[bold]Buscando proyectos con 'infrastructure'...[/bold]")
+            try:
+                all_projects = client.gl.projects.list(search='infrastructure', get_all=True)
+                matching = [p for p in all_projects if 'infrastructure' in p.path_with_namespace.lower()]
+                
+                if matching:
+                    console.print(f"Se encontraron {len(matching)} proyectos similares:")
+                    for p in matching[:10]:
+                        console.print(f"  • {p.path_with_namespace}")
+                    if len(matching) > 10:
+                        console.print(f"  ... y {len(matching) - 10} más")
+                else:
+                    console.print("No se encontraron proyectos similares")
+            except:
+                pass
+            
             return
         
     except Exception as e:
@@ -108,11 +141,10 @@ def init(gitlab_url, token, template_repo):
 
 @main.command()
 @click.argument('project_path')
-@click.option('--k8s-cluster', help='Nombre del cluster de Kubernetes', required=True)
 @click.option('--namespace', help='Namespace de Kubernetes', required=True)
-@click.option('--environment', help='Ambiente (dev/staging/prod)', default='dev')
+@click.option('--environments', help='Entornos a configurar (separados por coma)', default='dev,pre,pro')
 @click.option('--create-project', is_flag=True, help='Crear nuevo proyecto si no existe')
-def create(project_path, k8s_cluster, namespace, environment, create_project):
+def create(project_path, namespace, environments, create_project):
     """
     Crea el CI/CD para un repositorio de GitLab
     
@@ -136,11 +168,68 @@ def create(project_path, k8s_cluster, namespace, environment, create_project):
         
         # Obtener o crear proyecto
         if create_project:
-            project = client.create_project_if_not_exists(project_path)
-            console.print(f"[green]✓[/green] Proyecto listo: {project['web_url']}")
+            try:
+                project = client.create_project_if_not_exists(project_path)
+                console.print(f"[green]✓[/green] Proyecto listo: {project['web_url']}")
+            except ValueError as e:
+                console.print(f"[red]✗[/red] {str(e)}")
+                console.print("[yellow]💡[/yellow] El grupo/namespace debe existir antes de crear el proyecto")
+                console.print(f"[dim]  1. Crea el grupo en GitLab: {config.get('gitlab_url')}/admin/groups/new[/dim]")
+                console.print(f"[dim]  2. O usa un grupo existente que tengas disponible[/dim]")
+                return
         else:
-            project = client.get_project(project_path)
-            console.print(f"[green]✓[/green] Proyecto encontrado: {project['name']}")
+            try:
+                project = client.get_project(project_path)
+                console.print(f"[green]✓[/green] Proyecto encontrado: {project['name']}")
+            except Exception as e:
+                if "404" in str(e):
+                    console.print(f"[red]✗[/red] El proyecto '{project_path}' no existe")
+                    console.print("[yellow]💡[/yellow] Usa --create-project para crearlo automáticamente:")
+                    console.print(f"[dim]  gitlab-cicd create {project_path} --namespace {namespace} --create-project[/dim]")
+                else:
+                    console.print(f"[red]✗[/red] Error al acceder al proyecto: {str(e)}")
+                return
+        
+        # Obtener clusters disponibles del proyecto de plantillas
+        console.print("\n[bold]Obteniendo clusters disponibles...[/bold]")
+        available_clusters = []
+        try:
+            # Los GitLab Agents están asociados a proyectos
+            # Obtenemos los agents del proyecto de plantillas (clients/infrastructure)
+            try:
+                # Intentar obtener el proyecto de plantillas con manejo de errores de permisos
+                try:
+                    template_project = client._get_project_safe(config.get('template_repo'))
+                except gitlab.exceptions.GitlabGetError:
+                    # Si falla el acceso directo, intentar buscar por nombre
+                    projects = client.gl.projects.list(search=config.get('template_repo').split('/')[-1], get_all=True)
+                    template_project = None
+                    for p in projects:
+                        if p.path_with_namespace == config.get('template_repo'):
+                            template_project = p
+                            break
+                    
+                    if not template_project:
+                        raise Exception(f"Proyecto de plantillas '{config.get('template_repo')}' no encontrado.")
+                
+                # Obtener GitLab Agents del proyecto
+                agents = template_project.cluster_agents.list(get_all=True)
+                
+                for agent in agents:
+                    agent_name = agent.name
+                    cluster_context = f"{config.get('template_repo')}:{agent_name}"
+                    available_clusters.append(cluster_context)
+                    console.print(f"  [green]✓[/green] {cluster_context}")
+                    
+            except Exception as cluster_err:
+                console.print(f"[yellow]⚠[/yellow] No se pudieron obtener clusters: {str(cluster_err)}")
+                    
+        except Exception as e:
+            console.print(f"[yellow]⚠[/yellow] Error al buscar clusters: {str(e)}")
+        
+        if not available_clusters:
+            console.print("[yellow]⚠[/yellow] No se encontraron clusters configurados")
+            console.print("[dim]Ingresa el KUBE_CONTEXT manualmente para cada entorno[/dim]")
         
         # Cargar plantillas desde el repositorio central
         console.print(f"\nCargando plantillas desde: {config.get('template_repo')}")
@@ -166,15 +255,46 @@ def create(project_path, k8s_cluster, namespace, environment, create_project):
         if cicd_vars:
             console.print(f"  • Variables CI/CD (se guardarán en GitLab): {', '.join(cicd_vars)}")
         
+        # Configurar KUBE_CONTEXT por entorno
+        env_list = [e.strip() for e in environments.split(',')]
+        kube_contexts = {}
+        
+        console.print("\n[bold]Configuración de KUBE_CONTEXT por entorno:[/bold]")
+        for env in env_list:
+            console.print(f"\n[cyan]Entorno: {env}[/cyan]")
+            
+            if available_clusters:
+                console.print("Clusters disponibles:")
+                for idx, cluster in enumerate(available_clusters, 1):
+                    console.print(f"  {idx}. {cluster}")
+                
+                cluster_choice = Prompt.ask(
+                    f"Selecciona el cluster para {env} (número o ingresa manualmente)",
+                    default="1"
+                )
+                
+                try:
+                    cluster_idx = int(cluster_choice) - 1
+                    if 0 <= cluster_idx < len(available_clusters):
+                        kube_contexts[env] = available_clusters[cluster_idx]
+                    else:
+                        kube_contexts[env] = Prompt.ask(f"KUBE_CONTEXT para {env}")
+                except ValueError:
+                    kube_contexts[env] = cluster_choice
+            else:
+                kube_contexts[env] = Prompt.ask(
+                    f"KUBE_CONTEXT para {env}",
+                    default=f"{config.get('template_repo')}:cluster-{env}"
+                )
+        
         # Recopilar información adicional para variables de plantilla
         console.print("\n[bold]Información requerida para las plantillas:[/bold]")
         
         variables = {
             'project_name': project['name'],
             'project_path': project_path,
-            'k8s_cluster': k8s_cluster,
             'namespace': namespace,
-            'environment': environment,
+            'environments': env_list,
         }
         
         # Solicitar valores para variables de plantilla adicionales
@@ -230,9 +350,22 @@ def create(project_path, k8s_cluster, namespace, environment, create_project):
             )
             console.print(f"  [green]✓[/green] {file_path}")
         
+        # Crear variables KUBE_CONTEXT por entorno
+        console.print("\n[bold]Configurando variables KUBE_CONTEXT en GitLab...[/bold]")
+        for env, kube_context in kube_contexts.items():
+            client.create_or_update_variable(
+                project['id'],
+                'KUBE_CONTEXT',
+                kube_context,
+                protected=False,
+                masked=False,
+                environment_scope=env
+            )
+            console.print(f"  [green]✓[/green] KUBE_CONTEXT={kube_context} (scope: {env})")
+        
         # Crear variables CI/CD extraídas de las plantillas
         if cicd_variables:
-            console.print("\n[bold]Configurando variables CI/CD en GitLab...[/bold]")
+            console.print("\n[bold]Configurando variables CI/CD adicionales en GitLab...[/bold]")
             
             for key, var_config in cicd_variables.items():
                 client.create_or_update_variable(
@@ -283,27 +416,37 @@ def status(project_path):
         ))
         
         # Obtener último pipeline
-        pipelines = client.get_pipelines(project['id'], per_page=1)
-        if pipelines:
-            pipeline = pipelines[0]
-            status_color = {
-                'success': 'green',
-                'failed': 'red',
-                'running': 'yellow',
-                'pending': 'yellow'
-            }.get(pipeline['status'], 'white')
-            
-            console.print(f"Último pipeline: [{status_color}]{pipeline['status']}[/{status_color}]")
-            console.print(f"Rama: {pipeline['ref']}")
-            console.print(f"URL: {pipeline['web_url']}")
-        else:
-            console.print("[yellow]No se encontraron pipelines[/yellow]")
+        try:
+            pipelines = client.get_pipelines(project['id'], per_page=1)
+            if pipelines:
+                pipeline = pipelines[0]
+                status_color = {
+                    'success': 'green',
+                    'failed': 'red',
+                    'running': 'yellow',
+                    'pending': 'yellow'
+                }.get(pipeline['status'], 'white')
+                
+                console.print(f"Último pipeline: [{status_color}]{pipeline['status']}[/{status_color}]")
+                console.print(f"Rama: {pipeline['ref']}")
+                console.print(f"URL: {pipeline['web_url']}")
+            else:
+                console.print("[yellow]No se encontraron pipelines[/yellow]")
+        except Exception as e:
+            console.print(f"[yellow]⚠[/yellow] No se pudo acceder a los pipelines: {str(e)}")
         
         # Listar variables
         console.print("\n[bold]Variables CI/CD:[/bold]")
-        variables = client.get_variables(project['id'])
-        for var in variables:
-            console.print(f"  • {var['key']}")
+        try:
+            variables = client.get_variables(project['id'])
+            if variables:
+                for var in variables:
+                    console.print(f"  • {var['key']}")
+            else:
+                console.print("[dim]No hay variables configuradas[/dim]")
+        except Exception as e:
+            console.print(f"[yellow]⚠[/yellow] No se pudo acceder a las variables: {str(e)}")
+            console.print("[dim]El token actual no tiene permisos para leer variables CI/CD[/dim]")
             
     except Exception as e:
         console.print(f"[red]✗[/red] Error: {str(e)}")
