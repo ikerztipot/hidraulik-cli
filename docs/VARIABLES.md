@@ -90,6 +90,12 @@ Y las variables se crean en GitLab Settings → CI/CD → Variables:
 
 ```yaml
 # .gitlab-ci.yml.j2
+# Incluir bloques reutilizables
+include:
+  - project: '{{ template_repo }}'
+    ref: main
+    file: '/includes/.build-buildkit-scaleway.yml'
+
 stages:
   - build
   - deploy
@@ -99,6 +105,7 @@ variables:
   ENVIRONMENT: {{ environment }}
 
 build:
+  extends: .build-buildkit  # Del include remoto
   stage: build
   script:
     - docker login -u $CI_REGISTRY_USER -p $CICD_DOCKER_TOKEN }}
@@ -113,6 +120,31 @@ deploy:
   environment:
     name: {{ environment }}
     url: $CICD_APP_URL }}
+```
+
+## Variables Proporcionadas Automáticamente
+
+El CLI inyecta automáticamente estas variables en todas las plantillas:
+
+| Variable | Descripción | Ejemplo |
+|----------|-------------|---------|
+| `project_name` | Nombre del proyecto GitLab | `mi-app` |
+| `project_path` | Ruta completa del proyecto | `clients/acme/mi-app` |
+| `namespace` | Namespace de Kubernetes | `production` |
+| `environments` | Lista de entornos | `['pre', 'prod']` |
+| `template_repo` | Ruta del repositorio de plantillas | `clients/infrastructure` |
+
+**Uso típico:**
+```yaml
+# Include dinámico
+include:
+  - project: '{{ template_repo }}'
+    file: '/includes/.build.yml'
+
+# Deployment
+metadata:
+  name: {{ project_name }}
+  namespace: {{ namespace }}
 ```
 
 ### 2. Ejecutar el CLI

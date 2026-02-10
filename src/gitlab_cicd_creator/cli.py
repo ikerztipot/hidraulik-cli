@@ -295,6 +295,7 @@ def create(project_path, namespace, environments, create_project):
             'project_path': project_path,
             'namespace': namespace,
             'environments': env_list,
+            'template_repo': config.get('template_repo'),
         }
         
         # Solicitar valores para variables de plantilla adicionales

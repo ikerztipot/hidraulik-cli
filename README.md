@@ -2,25 +2,39 @@
 
 Un CLI potente y flexible para generar automáticamente configuraciones de CI/CD en repositorios de GitLab para despliegues en Kubernetes.
 
-## 🚀 Características
+## � Tabla de Contenidos
+
+- [Características](#-características)
+- [Requisitos](#-requisitos)
+- [Instalación](#-instalación)
+- [Uso Rápido](#-uso-rápido)
+- [Comandos Disponibles](#-comandos-disponibles)
+- [Repositorio de Plantillas](#-repositorio-de-plantillas)
+- [Variables en Plantillas](#-variables-en-plantillas)
+- [Configuración de GitLab](#-configuración-de-gitlab)
+- [Desarrollo](#-desarrollo)
+- [Contribuir](#-contribuir)
+
+## �🚀 Características
 
 - **Automatización Completa**: Genera pipelines CI/CD listos para producción
-- **Kubernetes Native**: Configuraciones optimizadas para clusters K8s
-- **Plantillas Personalizables**: Usa plantillas desde repositorios de GitLab
-- **Variables CI/CD**: Gestión automática de variables de entorno
-- **Múltiples Ambientes**: Soporte para dev, staging y producción
+- **Kubernetes Native**: Configuraciones optimizadas para clusters K8s con GitLab Agents
+- **Plantillas Personalizables**: Usa plantillas Jinja2 desde repositorios de GitLab
+- **Remote Includes**: Bloques reutilizables centralizados (sin duplicación)
+- **Variables CI/CD**: Gestión automática de variables de entorno y secretos
+- **Múltiples Ambientes**: Soporte para dev, staging y producción con KUBE_CONTEXT por entorno
+- **Detección de Clusters**: Integración automática con GitLab Agents para Kubernetes
+- **Organización por Tipos**: Pipeline, K8s, Helm, Config e Includes
 - **Integración GitLab**: Comunicación directa con la API de GitLab
 
 ## 📋 Requisitos
 
 - Python 3.8 o superior
-- Cuenta de GitLab con token de acceso personal
+- Cuenta de GitLab con token de acceso personal (permisos: `api`, `read_repository`, `write_repository`)
 - **Repositorio central de plantillas en GitLab** (obligatorio)
-- Acceso a un cluster de Kubernetes (para despliegues)
+- GitLab Agents configurados para acceso a clusters de Kubernetes
 
 ## 🔧 Instalación
-
-### Instalación Rápida (Recomendada)
 
 ```bash
 # 1. Clonar el repositorio
@@ -31,42 +45,12 @@ cd gitlab-repo-cicd-creator-cli
 ./install.sh
 ```
 
-El instalador automáticamente:
+El instalador:
 - ✅ Detecta tu sistema operativo
 - ✅ Instala las dependencias necesarias
 - ✅ Hace que `gitlab-cicd` esté disponible globalmente
 
-**Nota:** Es posible que tengas que cerrar y abrir tu terminal después de la instalación.
-
-### Instalación Manual
-
-<details>
-<summary>Click para ver opciones de instalación manual</summary>
-
-#### Opción 1: Con pipx (recomendado para CLIs)
-```bash
-# Instalar pipx
-brew install pipx  # macOS
-# o
-python3 -m pip install --user pipx  # Linux
-
-# Instalar gitlab-cicd-creator
-pipx install .
-```
-
-#### Opción 2: Con pip (instalación de usuario)
-```bash
-pip install --user .
-```
-
-#### Opción 3: Entorno virtual (desarrollo)
-```bash
-python -m venv venv
-source venv/bin/activate  # En Windows: venv\Scripts\activate
-pip install -e .
-```
-
-</details>
+**Nota:** Cierra y abre tu terminal después de la instalación.
 
 ### Desinstalación
 
@@ -83,192 +67,301 @@ gitlab-cicd init
 ```
 
 El CLI te pedirá:
-- URL de GitLab (ej: https://gitlab.com)
+- URL de GitLab (ej: `https://gitlab.workoholics.es`)
 - Token de acceso personal
-- **Ruta del repositorio de plantillas** (ej: grupo/plantillas-cicd) - **OBLIGATORIO**
+- **Ruta del repositorio de plantillas** (ej: `clients/infrastructure`)
 
 ### 2. Crear CI/CD para un proyecto
 
 ```bash
-gitlab-cicd create grupo/proyecto \
-  --k8s-cluster mi-cluster \
+gitlab-cicd create clients/acme/mi-app \
   --namespace production \
-  --environment prod
+  --environments pre,prod \
+  --create-project
 ```
 
-### 3. Ver estado del CI/CD
+El CLI:
+1. Detecta automáticamente los clusters disponibles (GitLab Agents)
+2. Te permite seleccionar el cluster para cada entorno
+3. Carga las plantillas desde el repositorio
+4. Solicita valores para variables
+5. Genera y commit los archivos al proyecto
 
-```bash
-gitlab-cicd status grupo/proyecto
-```
-
-### 4. Configurar variables CI/CD
-
-```bash
-gitlab-cicd set-variable grupo/proyecto API_KEY "tu-api-key" --masked
-```
-
-### 5. Listar plantillas disponibles
+### 3. Listar plantillas disponibles
 
 ```bash
 gitlab-cicd list-templates
 ```
 
-## 📚 Comandos Disponibles
-
-### `init`
-Inicializa la configuración del CLI.
+### 4. Ver estado del CI/CD
 
 ```bash
-gitlab-cicd init [--gitlab-url URL] [--token TOKEN] [--template-repo REPO]
+gitlab-cicd status clients/acme/mi-app
 ```
 
-**Opciones:**
-- `--gitlab-url`: URL de GitLab (por defecto: https://gitlab.com)
-- `--token`: Token de acceso personal
-- `--template-repo`: URL del repositorio de plantillas
+### 5. Configurar variables CI/CD
 
-### `create`
-Crea la configuración CI/CD para un repositorio.
+```bash
+gitlab-cicd set-variable clients/acme/mi-app API_KEY "valor-secreto" --masked --protected
+```
+
+## 📚 Comandos Disponibles
+
+### `init` - Inicializar configuración
+
+```bash
+gitlab-cicd init
+```
+
+Configura el CLI con URL de GitLab, token y repositorio de plantillas.
+
+### `create` - Crear CI/CD para un proyecto
 
 ```bash
 gitlab-cicd create PROJECT_PATH [OPTIONS]
 ```
 
 **Argumentos:**
-- `PROJECT_PATH`: Ruta del proyecto en GitLab (ej: grupo/proyecto)
+- `PROJECT_PATH`: Ruta del proyecto en GitLab (ej: `clients/acme/mi-app`)
 
 **Opciones:**
-- `--k8s-cluster`: Nombre del cluster de Kubernetes (requerido)
 - `--namespace`: Namespace de Kubernetes (requerido)
-- `--environment`: Ambiente (dev/staging/prod, por defecto: dev)
+- `--environments`: Entornos separados por coma (default: `dev,pre,pro`)
 - `--create-project`: Crear el proyecto si no existe
 
 **Ejemplo:**
 ```bash
-gitlab-cicd create mi-grupo/mi-app \
-  --k8s-cluster production-k8s \
-  --namespace mi-app-prod \
-  --environment prod \
+gitlab-cicd create clients/workoholics/web-app \
+  --namespace workoholics-web \
+  --environments pre,prod \
   --create-project
 ```
 
-### `status`
-Muestra el estado del CI/CD de un proyecto.
+### `status` - Ver estado del CI/CD
 
 ```bash
 gitlab-cicd status PROJECT_PATH
 ```
 
-### `set-variable`
-Establece una variable CI/CD en un proyecto.
+### `set-variable` - Configurar variable CI/CD
 
 ```bash
 gitlab-cicd set-variable PROJECT_PATH KEY VALUE [OPTIONS]
 ```
 
 **Opciones:**
-- `--protected`: Marcar como variable protegida
-- `--masked`: Enmascarar el valor en los logs
+- `--protected`: Variable solo disponible en ramas protegidas
+- `--masked`: Enmascarar valor en logs
 
 **Ejemplo:**
 ```bash
-gitlab-cicd set-variable mi-grupo/mi-app DATABASE_PASSWORD "secreto123" --masked --protected
+gitlab-cicd set-variable clients/acme/app DB_PASSWORD "secreto" --masked --protected
 ```
 
-### `list-templates`
-Lista las plantillas disponibles.
+### `list-templates` - Listar plantillas
 
 ```bash
 gitlab-cicd list-templates
 ```
 
-## 🔑 Configuración Inicial
+Muestra todas las plantillas disponibles en el repositorio configurado.
 
-### 1. Crear Repositorio de Plantillas
+## � Repositorio de Plantillas
 
-**⚠️ IMPORTANTE**: Antes de usar el CLI, debes crear un repositorio en GitLab con las plantillas.
+### Estructura Requerida
 
-📖 **[Ver Guía Completa de Configuración de Plantillas](docs/TEMPLATE_REPO_SETUP.md)**
+El repositorio de plantillas debe seguir esta organización:
 
-Resumen rápido:
-1. Crea un repositorio en GitLab (ej: `tu-grupo/plantillas-cicd`)
-2. Añade archivos de plantilla con extensión `.j2`
-3. Estructura recomendada: `.gitlab-ci.yml.j2`, `k8s/*.j2`, `docker/*.j2`
+```
+clients/infrastructure/          # Tu repositorio de plantillas
+├── pipeline/                    # Plantillas de CI/CD (procesadas con Jinja2)
+│   ├── .gitlab-ci.yml.j2       # Pipeline principal
+│   └── build-stage.yml.j2      # Stages adicionales (opcional)
+│
+├── includes/                    # Bloques reutilizables (NO procesados, incluidos remotamente)
+│   ├── .build-buildkit-scaleway.yml
+│   ├── .deploy-k8s.yml
+│   └── .test-python.yml
+│
+├── k8s/                         # Manifiestos de Kubernetes
+│   ├── deployment.yaml.j2
+│   ├── service.yaml.j2
+│   └── ingress.yaml.j2
+│
+├── helm/                        # Charts de Helm (opcional)
+│   └── values.yaml.j2
+│
+└── config/                      # Configuraciones (opcional)
+    └── env.j2
+```
 
-### 2. Obtener Token de GitLab
+### Tipos de Archivos
 
-Para obtener un token de acceso personal:
+| Carpeta | Extensión | Procesado | Destino | Uso |
+|---------|-----------|-----------|---------|-----|
+| `pipeline/` | `.j2` | ✅ Sí | Raíz proyecto | Archivos CI/CD procesados con variables |
+| `includes/` | `.yml` | ❌ No | No se copian | Bloques incluidos remotamente |
+| `k8s/` | `.j2` | ✅ Sí | `k8s/` | Manifiestos Kubernetes |
+| `helm/` | `.j2` | ✅ Sí | `helm/` | Charts Helm |
+| `config/` | `.j2` | ✅ Sí | `config/` | Configuraciones |
+
+### Ejemplo de Plantilla Principal
+
+**`pipeline/.gitlab-ci.yml.j2`**:
+```yaml
+# GitLab CI/CD para {{ project_name }}
+
+# Incluir bloques reutilizables desde el repositorio de plantillas
+include:
+  - project: '{{ template_repo }}'
+    ref: main
+    file: 
+      - '/includes/.build-buildkit-scaleway.yml'
+      - '/includes/.deploy-k8s.yml'
+
+stages:
+  - build
+  - deploy
+
+variables:
+  PROJECT_PATH: {{ project_path }}
+  NAMESPACE: {{ namespace }}
+
+build:
+  extends: .build-buildkit  # Definido en includes/.build-buildkit-scaleway.yml
+  only:
+    - main
+
+# Deploy por cada entorno
+{% for env in environments %}
+deploy:{{ env }}:
+  extends: .deploy-k8s  # Definido en includes/.deploy-k8s.yml
+  variables:
+    KUBE_CONTEXT: $KUBE_CONTEXT
+  environment:
+    name: {{ env }}
+  only:
+    - main
+{% endfor %}
+```
+
+### Ejemplo de Remote Include
+
+**`includes/.build-buildkit-scaleway.yml`** (sin extensión `.j2`):
+```yaml
+.build-buildkit:
+  stage: build
+  image:
+    name: moby/buildkit:latest
+    entrypoint: [""]
+  script:
+    - buildctl build --frontend dockerfile.v0 \
+        --local context=. \
+        --output type=image,name=$DOCKER_REGISTRY/$PROJECT_PATH:$CI_COMMIT_SHORT_SHA,push=true
+  tags:
+    - scaleway
+```
+
+**Ventajas de Remote Includes:**
+- ✅ Mantenimiento centralizado
+- ✅ Sin duplicación de código
+- ✅ Actualiza una vez, afecta todos los proyectos
+- ✅ Versionado con tags/branches
+
+## 🔑 Variables en Plantillas
+
+El CLI maneja dos tipos de variables:
+
+### 1. Variables de Plantilla (sustituidas directamente)
+
+Estas variables se procesan y sustituyen en los archivos generados:
+
+| Variable | Descripción | Ejemplo |
+|----------|-------------|---------|
+| `project_name` | Nombre del proyecto | `mi-app` |
+| `project_path` | Ruta completa del proyecto | `clients/acme/mi-app` |
+| `namespace` | Namespace de Kubernetes | `production` |
+| `environments` | Lista de entornos | `['pre', 'prod']` |
+| `template_repo` | Repositorio de plantillas | `clients/infrastructure` |
+
+**Uso en plantillas:**
+```yaml
+metadata:
+  name: {{ project_name }}
+  namespace: {{ namespace }}
+
+include:
+  - project: '{{ template_repo }}'
+    file: '/includes/.build.yml'
+
+{% for env in environments %}
+deploy:{{ env }}:
+  environment:
+    name: {{ env }}
+{% endfor %}
+```
+
+### 2. Variables CI/CD (guardadas en GitLab)
+
+Variables que empiezan con `CICD_` se guardan como variables CI/CD en GitLab y **NO** se sustituyen en los archivos.
+
+**En la plantilla:**
+```yaml
+build:
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CICD_REGISTRY_TOKEN
+    - curl -H "Authorization: Bearer $CICD_API_KEY" $CICD_API_URL
+```
+
+**Durante la ejecución**, el CLI:
+1. Detecta automáticamente las variables `CICD_*`
+2. Solicita sus valores al usuario
+3. Las guarda como variables CI/CD en GitLab
+4. Opcionalmente las marca como protegidas/enmascaradas
+5. Las mantiene como `$CICD_*` en los archivos generados (NO las sustituye)
+
+**Ejemplo interactivo:**
+```bash
+Valores para variables CI/CD:
+CICD_REGISTRY_TOKEN: ghp_xxxxxxxxxxxx
+  ¿Marcar CICD_REGISTRY_TOKEN como protegida? [y/N]: y
+  ¿Marcar CICD_REGISTRY_TOKEN como enmascarada? [Y/n]: y
+
+CICD_API_KEY: sk_live_xxxxx
+  ¿Marcar CICD_API_KEY como protegida? [y/N]: y
+  ¿Marcar CICD_API_KEY como enmascarada? [Y/n]: y
+```
+
+## ⚙️ Configuración de GitLab
+
+### Obtener Token de Acceso
 
 1. Ve a GitLab → Settings → Access Tokens
-2. Crea un nuevo token con los siguientes permisos:
+2. Crea un nuevo token con permisos:
    - `api` - Acceso completo a la API
    - `read_repository` - Leer repositorios
    - `write_repository` - Escribir en repositorios
 3. Guarda el token de forma segura
+4. Úsalo durante `gitlab-cicd init`
 
-## 📝 Repositorio Central de Plantillas (Obligatorio)
+### GitLab Agents para Kubernetes
 
-**IMPORTANTE**: Las plantillas deben estar en un repositorio de GitLab accesible. El CLI lee las plantillas directamente desde este repositorio.
+El CLI detecta automáticamente los GitLab Agents configurados en tu repositorio de plantillas.
 
-### Estructura Recomendada
+**Configuración:**
+1. Los agents deben estar en el proyecto del repositorio de plantillas (ej: `clients/infrastructure`)
+2. El CLI los lista automáticamente al crear un proyecto
+3. Puedes seleccionar el cluster para cada entorno
 
-Crea un repositorio en GitLab (ej: `tu-grupo/plantillas-cicd`) con la siguiente estructura:
-
+**Formato de KUBE_CONTEXT:**
 ```
-plantillas-cicd/
-├── .gitlab-ci.yml.j2
-├── k8s/
-│   ├── deployment.yaml.j2
-│   ├── service.yaml.j2
-│   └── ingress.yaml.j2
-└── docker/
-    └── Dockerfile.j2
+<template_repo>:<agent_name>
 ```
 
-**Notas importantes:**
-- Todos los archivos de plantilla deben tener extensión `.j2`
-- El CLI carga automáticamente todas las plantillas `.j2` del repositorio
-- Las plantillas usan sintaxis Jinja2 para sustitución de variables
-- El repositorio debe ser accesible con tu token de GitLab
-
-### Gestión de Variables
-
-El CLI maneja dos tipos de variables en las plantillas:
-
-#### 1. Variables de Plantilla (se sustituyen en archivos)
-
-Variables que se solicitan y se escriben directamente en los archivos generados:
-
-- `{{ project_name }}` - Nombre del proyecto
-- `{{ project_path }}` - Ruta completa del proyecto
-- `{{ k8s_cluster }}` - Nombre del cluster K8s
-- `{{ namespace }}` - Namespace de Kubernetes
-- `{{ environment }}` - Ambiente (dev/staging/prod)
-- `{{ docker_registry }}` - Registro de Docker
-- `{{ docker_image }}` - Nombre de la imagen
-
-#### 2. Variables CI/CD (se guardan en GitLab)
-
-Variables que se mantienen como referencias y se guardan en la configuración de GitLab:
-
-**Convención**: Variables que empiezan con `CICD_` en las plantillas se guardan automáticamente como variables CI/CD en GitLab.
-
-Ejemplo en plantilla:
-```yaml
-build:
-  script:
-    - docker login -u $CI_REGISTRY_USER -p $CICD_DOCKER_TOKEN }}
-    - curl -H "Authorization: Bearer $CICD_API_KEY }}" $CICD_API_URL }}
+**Ejemplo:**
 ```
-
-Durante la ejecución, el CLI:
-1. Detecta las variables `CICD_*`
-2. Solicita sus valores al usuario
-3. Las guarda como variables CI/CD en GitLab (protegidas/enmascaradas según se indique)
-4. **NO las sustituye** en los archivos, se mantienen como `$CICD_* }}`
-
-📖 **[Ver Documentación Completa de Variables](docs/VARIABLES.md)**
+clients/infrastructure:scaleway-internal-worko-prod
+```
 
 ## 🧪 Desarrollo
 
@@ -276,77 +369,44 @@ Durante la ejecución, el CLI:
 
 ```bash
 pytest
-```
-
-### Con cobertura
-
-```bash
-pytest --cov=gitlab_cicd_creator --cov-report=html
+pytest --cov=gitlab_cicd_creator --cov-report=html  # Con cobertura
 ```
 
 ### Formatear código
 
 ```bash
-black src/
-isort src/
-```
-
-### Linting
-
-```bash
-flake8 src/
-mypy src/
+make format    # black + isort
+make lint      # flake8 + mypy
 ```
 
 ## 📦 Estructura del Proyecto
 
 ```
 gitlab-repo-cicd-creator-cli/
-├── src/
-│   └── gitlab_cicd_creator/
-│       ├── __init__.py
-│       ├── cli.py              # CLI principal
-│       ├── config.py           # Gestión de configuración
-│       ├── gitlab_client.py    # Cliente de GitLab API
-│       ├── template_manager.py # Gestor de plantillas (carga desde GitLab)
-│       └── k8s_generator.py    # Generador K8s
-├── tests/
-│   ├── __init__.py
-│   ├── test_cli.py
-│   ├── test_gitlab_client.py
-│   └── test_template_manager.py
-├── docs/
-│   ├── USAGE.md                # Guía de uso completa
-│   ├── CONTRIBUTING.md         # Guía de contribución
-│   └── TEMPLATE_REPO_SETUP.md  # Configurar repositorio de plantillas
-├── pyproject.toml
-├── requirements.txt
-└── README.md
+├── src/gitlab_cicd_creator/
+│   ├── cli.py              # CLI principal con Click
+│   ├── config.py           # Gestión de configuración (~/.gitlab-cicd-creator/config.json)
+│   ├── gitlab_client.py    # Cliente GitLab API con soporte multi-nivel
+│   ├── template_manager.py # Carga plantillas desde GitLab, detecta tipos
+│   └── k8s_generator.py    # Procesador Jinja2, preserva CICD_ vars
+├── tests/                  # Suite de tests con pytest
+├── pyproject.toml         # Configuración del proyecto
+└── README.md              # Esta documentación
 ```
-
-**Nota**: Las plantillas se almacenan en tu **repositorio GitLab** (ver [docs/TEMPLATE_REPO_SETUP.md](docs/TEMPLATE_REPO_SETUP.md)).
 
 ## 🤝 Contribuir
 
-Las contribuciones son bienvenidas! Por favor:
+Las contribuciones son bienvenidas:
 
-1. Haz fork del proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
+1. Fork del proyecto
+2. Crea una rama (`git checkout -b feature/AmazingFeature`)
+3. Commit cambios (`git commit -m 'Add AmazingFeature'`)
+4. Push (`git push origin feature/AmazingFeature`)
 5. Abre un Pull Request
 
 ## 📄 Licencia
 
-Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más detalles.
-
-## 🐛 Reportar Problemas
-
-Si encuentras algún bug o tienes una sugerencia, por favor abre un [issue](https://github.com/ikerztipot/gitlab-repo-cicd-creator-cli/issues).
-
-## 👥 Autores
-
-- Tu Nombre - [@ikerztipot](https://github.com/ikerztipot)
+MIT License - Ver archivo `LICENSE`
 
 ## 🙏 Agradecimientos
 

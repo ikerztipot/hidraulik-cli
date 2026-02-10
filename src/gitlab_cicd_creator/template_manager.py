@@ -16,6 +16,15 @@ console = Console()
 class TemplateManager:
     """Gestor para cargar y procesar plantillas desde un repositorio GitLab"""
     
+    # Mapeo de carpetas de plantillas a rutas de destino en el proyecto
+    TEMPLATE_PATHS = {
+        'pipeline': '',           # Raíz del proyecto (.gitlab-ci.yml)
+        'k8s': 'k8s',            # Carpeta k8s/ para manifiestos
+        'helm': 'helm',          # Carpeta helm/ para charts
+        'config': 'config',      # Carpeta config/ para configuraciones
+        'includes': None,        # Archivos remotos (no se copian)
+    }
+    
     def __init__(self, template_repo_path: str):
         """
         Inicializa el gestor de plantillas
@@ -25,6 +34,7 @@ class TemplateManager:
         """
         self.template_repo_path = template_repo_path
         self.templates_cache = {}
+        self.template_types = {}  # Mapeo de archivo -> tipo de plantilla
     
     def load_templates(self) -> Dict[str, str]:
         """
@@ -63,19 +73,34 @@ class TemplateManager:
             tree = project.repository_tree(recursive=True, get_all=True, ref=ref)
             
             # Filtrar solo archivos .j2 (plantillas Jinja2)
-            template_files = [item for item in tree if item['type'] == 'blob' and item['name'].endswith('.j2')]
+            # Excluir archivos en includes/ ya que son referencias remotas
+            template_files = [
+                item for item in tree 
+                if item['type'] == 'blob' 
+                and item['name'].endswith('.j2')
+                and not item['path'].startswith('includes/')
+            ]
             
             console.print(f"  • Encontrados {len(template_files)} archivos de plantilla")
             
             # Descargar contenido de cada plantilla
             for item in template_files:
                 file_path = item['path']
+                
+                # Detectar tipo de plantilla
+                template_type = self._detect_template_type(file_path)
+                
                 try:
                     # Obtener contenido del archivo
                     file_content = project.files.get(file_path=file_path, ref=ref)
                     content = file_content.decode().decode('utf-8')
                     templates[file_path] = content
-                    console.print(f"  • Cargada: {file_path}")
+                    self.template_types[file_path] = template_type
+                    
+                    # Mostrar con información de tipo
+                    dest_path = self._calculate_dest_path(file_path, template_type)
+                    type_color = "cyan" if template_type != 'unknown' else "yellow"
+                    console.print(f"  • Cargada: {file_path} → {dest_path} ([{type_color}]{template_type}[/{type_color}])")
                 except Exception as e:
                     console.print(f"  [yellow]⚠[/yellow] Error al cargar {file_path}: {str(e)}")
             
@@ -118,6 +143,69 @@ class TemplateManager:
         """
         return self.templates_cache.get(template_name, '')
     
+    def _detect_template_type(self, file_path: str) -> str:
+        """
+        Detecta el tipo de plantilla según la carpeta
+        
+        Args:
+            file_path: Ruta del archivo en el repositorio (ej: pipeline/.gitlab-ci.yml.j2)
+            
+        Returns:
+            Tipo de plantilla: 'pipeline', 'k8s', 'helm', 'config', o 'unknown'
+        """
+        parts = file_path.split('/')
+        if len(parts) > 1:
+            first_dir = parts[0]
+            if first_dir in self.TEMPLATE_PATHS:
+                return first_dir
+        return 'unknown'
+    
+    def _calculate_dest_path(self, file_path: str, template_type: str) -> str:
+        """
+        Calcula la ruta de destino del archivo en el proyecto
+        
+        Args:
+            file_path: Ruta original en el repo de plantillas (ej: pipeline/.gitlab-ci.yml.j2)
+            template_type: Tipo de plantilla detectado
+            
+        Returns:
+            Ruta de destino (ej: .gitlab-ci.yml o k8s/deployment.yaml)
+        """
+        # Remover la extensión .j2
+        file_path = file_path[:-3] if file_path.endswith('.j2') else file_path
+        
+        # Remover la carpeta de tipo de plantilla del path
+        parts = file_path.split('/')
+        if len(parts) > 1 and parts[0] == template_type:
+            # Remover el primer directorio (pipeline/, k8s/, etc.)
+            file_name = '/'.join(parts[1:])
+        else:
+            file_name = file_path
+        
+        # Agregar el prefijo de carpeta de destino según el tipo
+        dest_prefix = self.TEMPLATE_PATHS.get(template_type, '')
+        
+        if dest_prefix:
+            return f"{dest_prefix}/{file_name}"
+        else:
+            return file_name
+    
+    def get_templates_by_type(self, template_type: str) -> Dict[str, str]:
+        """
+        Obtiene las plantillas de un tipo específico
+        
+        Args:
+            template_type: Tipo de plantilla ('pipeline', 'k8s', 'helm', etc.)
+            
+        Returns:
+            Diccionario con plantillas del tipo especificado
+        """
+        return {
+            path: content 
+            for path, content in self.templates_cache.items()
+            if self.template_types.get(path) == template_type
+        }
+    
     def extract_variables(self, templates: Dict[str, str]) -> Tuple[List[str], List[str]]:
         """
         Extrae y clasifica variables de las plantillas Jinja2
@@ -157,3 +245,34 @@ class TemplateManager:
                 template_vars.append(var)
         
         return template_vars, cicd_vars
+    
+    def get_remote_includes(self, gitlab_url: str, token: str, ref: str = 'main') -> List[str]:
+        """Obtiene la lista de archivos remotos disponibles en includes/.
+        
+        Estos archivos se incluyen directamente desde el repositorio remoto
+        sin copiarlos al proyecto destino.
+        
+        Args:
+            gitlab_url: URL de GitLab
+            token: Token de acceso
+            ref: Rama o tag del repositorio (por defecto: main)
+            
+        Returns:
+            Lista de rutas de archivos en includes/
+        """
+        try:
+            gl = gitlab.Gitlab(gitlab_url, private_token=token)
+            gl.auth()
+            
+            project = gl.projects.get(self.template_repo_path)
+            tree = project.repository_tree(recursive=True, get_all=True, ref=ref)
+            
+            includes = []
+            for item in tree:
+                if item['type'] == 'blob' and item['path'].startswith('includes/'):
+                    includes.append(item['path'])
+            
+            return sorted(includes)
+        except Exception as e:
+            console.print(f"[yellow]⚠[/yellow] No se pudo cargar archivos remotos: {e}")
+            return []

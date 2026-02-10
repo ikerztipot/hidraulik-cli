@@ -1,12 +1,24 @@
-# Ejemplo de Plantilla con Variables CI/CD
+# Ejemplo de Plantilla con Variables CI/CD y Remote Includes
 
-Este archivo muestra cómo crear plantillas que usen tanto variables de plantilla (que se sustituyen) como variables CI/CD (que se guardan en GitLab).
+Este archivo muestra cómo crear plantillas que usen:
+- Variables de plantilla (se sustituyen directamente)
+- Variables CI/CD (se guardan en GitLab)
+- Remote includes dinámicos (bloques reutilizables)
 
 ## `.gitlab-ci.yml.j2`
 
 ```yaml
 # GitLab CI/CD para {{ project_name }}
 # Generado con gitlab-cicd-creator
+# Repositorio: {{ project_path }}
+
+# Incluir bloques reutilizables desde el repositorio de plantillas
+include:
+  - project: '{{ template_repo }}'
+    ref: main
+    file: 
+      - '/includes/.build-buildkit-scaleway.yml'
+      - '/includes/.deploy-k8s.yml'
 
 stages:
   - build
@@ -18,15 +30,17 @@ variables:
   ENVIRONMENT: {{ environment }}
   DOCKER_REGISTRY: {{ docker_registry }}
   DOCKER_IMAGE: $DOCKER_REGISTRY/$PROJECT_NAME
+  NAMESPACE: {{ namespace }}
 
 # ============================================
-# BUILD STAGE
+# BUILD STAGE - Usando bloque remoto
 # ============================================
 build-image:
+  extends: .build-buildkit  # Definido en includes/.build-buildkit-scaleway.yml
   stage: build
-  image: docker:latest
-  services:
-    - docker:dind
+  variables:
+    IMAGE_NAME: $DOCKER_IMAGE
+    IMAGE_TAG: $CI_COMMIT_SHORT_SHA
   script:
     - echo "Building Docker image for $ENVIRONMENT"
     # Usar variable CI/CD para autenticación (CICD_DOCKER_TOKEN)
