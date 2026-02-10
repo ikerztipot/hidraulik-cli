@@ -50,17 +50,27 @@ else
     echo ""
     echo "📦 Instalando gitlab-cicd globalmente..."
     
-    # Instalar con pip --user (funciona sin permisos de admin)
-    # --break-system-packages es seguro cuando se combina con --user
-    python3 -m pip install --user --break-system-packages . --quiet
+    # Detectar si estamos en un virtualenv
+    if [[ -n "$VIRTUAL_ENV" ]]; then
+        # Dentro de virtualenv: instalar sin --user
+        echo "   (virtualenv detectado: $VIRTUAL_ENV)"
+        python3 -m pip install . --quiet
+    else
+        # Fuera de virtualenv: instalar con --user para evitar conflictos con el sistema
+        # --break-system-packages es seguro cuando se combina con --user
+        python3 -m pip install --user --break-system-packages . --quiet
+    fi
     
     # Detectar ruta de instalación
     USER_BIN=""
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS
+    if [[ -n "$VIRTUAL_ENV" ]]; then
+        # Dentro de virtualenv: el binario está en $VIRTUAL_ENV/bin
+        USER_BIN="$VIRTUAL_ENV/bin"
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS (fuera de virtualenv)
         USER_BIN="$HOME/Library/Python/$PYTHON_VERSION/bin"
     else
-        # Linux
+        # Linux (fuera de virtualenv)
         USER_BIN="$HOME/.local/bin"
     fi
     

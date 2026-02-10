@@ -66,12 +66,13 @@ def init(gitlab_url, token, template_repo):
     
     # Verificar conexión y repositorio de plantillas
     try:
+        console.print("\n[dim]Conectando con GitLab...[/dim]")
         client = GitLabClient(gitlab_url, token)
         user = client.get_current_user()
         console.print(f"[green]✓[/green] Conectado como: {user['username']}")
         
         # Verificar el tipo y alcance del token
-        console.print("\n[bold]Verificando permisos del token...[/bold]")
+        console.print("\n[dim]Verificando permisos del token...[/dim]")
         try:
             # Intentar listar proyectos del usuario para verificar alcance del token
             test_projects = client.gl.projects.list(membership=True, per_page=1, get_all=False)
@@ -80,17 +81,17 @@ def init(gitlab_url, token, template_repo):
             else:
                 console.print("[yellow]⚠[/yellow] Advertencia: El token parece tener alcance limitado")
         except Exception as e:
-            console.print(f"[yellow]⚠[/yellow] Advertencia: Token con permisos limitados - {str(e)}")
-            console.print("[yellow]⚠[/yellow] Si es un Project Access Token, solo funcionará con el repo de plantillas")
-            console.print("[yellow]⚠[/yellow] Recomendado: Usar un Personal Access Token con scope 'api' o 'write_repository'")
+            console.print(f"[yellow]⚠[/yellow] Advertencia: Token con permisos limitados")
+            console.print("[dim]Si es un Project Access Token, solo funcionará con el repo de plantillas[/dim]")
         
         # Verificar que el repositorio de plantillas existe
-        console.print(f"\nVerificando repositorio de plantillas: {template_repo}")
+        console.print(f"\n[dim]Verificando repositorio de plantillas: {template_repo}...[/dim]")
         try:
             templates_project = client.get_project(template_repo)
             console.print(f"[green]✓[/green] Repositorio encontrado: {templates_project['name']}")
             
             # Verificar que hay archivos en el repositorio
+            console.print("[dim]Escaneando plantillas disponibles...[/dim]")
             tree = client.list_repository_tree(templates_project['id'], recursive=True)
             template_files = [item for item in tree if item['type'] == 'blob' and item['name'].endswith('.j2')]
             
@@ -106,22 +107,23 @@ def init(gitlab_url, token, template_repo):
             console.print("  • Tienes permisos de lectura en el repositorio")
             console.print("  • El repositorio existe y contiene plantillas .j2")
             
-            # Intentar buscar proyectos similares
-            console.print("\n[bold]Buscando proyectos con 'infrastructure'...[/bold]")
-            try:
-                all_projects = client.gl.projects.list(search='infrastructure', get_all=True)
-                matching = [p for p in all_projects if 'infrastructure' in p.path_with_namespace.lower()]
-                
-                if matching:
-                    console.print(f"Se encontraron {len(matching)} proyectos similares:")
-                    for p in matching[:10]:
-                        console.print(f"  • {p.path_with_namespace}")
-                    if len(matching) > 10:
-                        console.print(f"  ... y {len(matching) - 10} más")
-                else:
-                    console.print("No se encontraron proyectos similares")
-            except:
-                pass
+            # Intentar buscar proyectos similares (limitado)
+            if Confirm.ask("\n¿Buscar proyectos similares que contengan 'infrastructure'?", default=False):
+                console.print("[dim]Buscando proyectos (esto puede tardar)...[/dim]")
+                try:
+                    all_projects = client.gl.projects.list(search='infrastructure', per_page=20, get_all=False)
+                    matching = [p for p in all_projects if 'infrastructure' in p.path_with_namespace.lower()]
+                    
+                    if matching:
+                        console.print(f"Se encontraron {len(matching)} proyectos similares:")
+                        for p in matching[:10]:
+                            console.print(f"  • {p.path_with_namespace}")
+                        if len(matching) > 10:
+                            console.print(f"  ... y {len(matching) - 10} más")
+                    else:
+                        console.print("No se encontraron proyectos similares")
+                except Exception as search_err:
+                    console.print(f"[dim]No se pudo buscar proyectos: {str(search_err)}[/dim]")
             
             return
         
