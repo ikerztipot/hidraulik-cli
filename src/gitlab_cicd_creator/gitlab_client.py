@@ -122,19 +122,75 @@ class GitLabClient:
                         
                         try:
                             group = self.gl.groups.create(group_data)
-                            parent_id = group.id
-                            console.print(f"  [green]✓[/green] Grupo creado: {current_path}")
+                            # Asegurar que obtenemos el ID correctamente
+                            parent_id = group.id if hasattr(group, 'id') else group.__dict__.get('_attrs', {}).get('id')
+                            if not parent_id:
+                                # Recargar el grupo para obtener el ID
+                                import time
+                                time.sleep(0.5)  # Esperar brevemente para que GitLab procese
+                                encoded_path = quote(current_path, safe='')
+                                group = self.gl.groups.get(encoded_path)
+                                parent_id = group.id
+                            console.print(f"  [green]✓[/green] Grupo creado: {current_path} (ID: {parent_id})")
+                        except gitlab.exceptions.GitlabCreateError as create_err:
+                            # Si el error es "already taken", intentar obtener el grupo existente
+                            if "already been taken" in str(create_err):
+                                console.print(f"  [yellow]⚠[/yellow] El grupo ya existe, buscando: {current_path}")
+                                try:
+                                    import time
+                                    time.sleep(0.5)
+                                    
+                                    # Si es un subgrupo (tiene parent), buscar en los subgrupos del padre
+                                    if parent_id:
+                                        parent_group = self.gl.groups.get(parent_id)
+                                        subgroups = parent_group.subgroups.list(search=group_name, get_all=True)
+                                        
+                                        # Buscar el subgrupo que coincida exactamente
+                                        for sg in subgroups:
+                                            if sg.path == group_name:
+                                                # Obtener el grupo completo
+                                                group = self.gl.groups.get(sg.id)
+                                                parent_id = group.id
+                                                console.print(f"  [green]✓[/green] Subgrupo encontrado: {current_path} (ID: {parent_id})")
+                                                break
+                                        else:
+                                            raise Exception(f"Subgrupo '{group_name}' no encontrado en el padre")
+                                    else:
+                                        # Es un grupo raíz, buscar directamente
+                                        encoded_path = quote(group_name, safe='')
+                                        group = self.gl.groups.get(encoded_path)
+                                        parent_id = group.id
+                                        console.print(f"  [green]✓[/green] Grupo encontrado: {current_path} (ID: {parent_id})")
+                                        
+                                except Exception as get_err:
+                                    console.print(f"  [red]✗[/red] No se pudo obtener el grupo existente: {str(get_err)}")
+                                    raise ValueError(f"El grupo '{current_path}' existe pero no se puede acceder: {str(get_err)}")
+                            else:
+                                console.print(f"  [red]✗[/red] Error creando grupo {current_path}: {str(create_err)}")
+                                raise ValueError(f"No se pudo crear el grupo '{current_path}': {str(create_err)}")
                         except Exception as e:
                             console.print(f"  [red]✗[/red] Error creando grupo {current_path}: {str(e)}")
                             raise ValueError(f"No se pudo crear el grupo '{current_path}': {str(e)}")
                 
                 # Ahora crear el proyecto en el último grupo
                 console.print(f"  [yellow]→[/yellow] Creando proyecto: {name}")
-                project = self.gl.projects.create({
-                    'name': name,
-                    'namespace_id': parent_id,
-                })
-                console.print(f"  [green]✓[/green] Proyecto creado: {project_path}")
+                
+                if not parent_id:
+                    raise ValueError(f"No se pudo obtener el ID del grupo para '{namespace_parts}'")
+                
+                console.print(f"  [dim]Usando namespace_id: {parent_id}[/dim]")
+                
+                try:
+                    project = self.gl.projects.create({
+                        'name': name,
+                        'path': name,
+                        'namespace_id': parent_id,
+                    })
+                    console.print(f"  [green]✓[/green] Proyecto creado: {project_path}")
+                except gitlab.exceptions.GitlabCreateError as e:
+                    console.print(f"  [red]✗[/red] Error al crear proyecto: {str(e)}")
+                    console.print(f"  [dim]Debug - namespace_id: {parent_id}, name: {name}, path: {name}[/dim]")
+                    raise ValueError(f"No se pudo crear el proyecto '{name}': {str(e)}")
             else:
                 # Proyecto en namespace personal
                 project = self.gl.projects.create({'name': project_path})
@@ -198,16 +254,26 @@ class GitLabClient:
         """
         project = self._get_project_safe(project_id)
         
+        # Buscar si existe la variable con el mismo key Y scope
+        # GitLab permite múltiples variables con el mismo key pero diferentes scopes
+        existing_var = None
         try:
-            # Intentar obtener la variable
-            var = project.variables.get(key)
-            # Si existe, actualizarla
-            var.value = value
-            var.protected = protected
-            var.masked = masked
-            var.save()
+            all_vars = project.variables.list(get_all=True)
+            for var in all_vars:
+                if var.key == key and var.environment_scope == environment_scope:
+                    existing_var = var
+                    break
         except gitlab.exceptions.GitlabGetError:
-            # La variable no existe, crearla
+            pass
+        
+        if existing_var:
+            # Actualizar variable existente
+            existing_var.value = value
+            existing_var.protected = protected
+            existing_var.masked = masked
+            existing_var.save()
+        else:
+            # Crear nueva variable
             project.variables.create({
                 'key': key,
                 'value': value,
@@ -294,3 +360,136 @@ class GitLabClient:
         project = self._get_project_safe(project_id)
         tree = project.repository_tree(path=path, ref=ref, recursive=recursive, get_all=True)
         return [item for item in tree]
+    
+    def get_available_runners(self, scope: str = 'all') -> List[Dict[str, Any]]:
+        """
+        Obtiene los runners disponibles en la instancia
+        
+        Args:
+            scope: Alcance de runners ('active', 'paused', 'online', 'all')
+            
+        Returns:
+            Lista de runners con sus tags y estado
+        """
+        try:
+            # Intentar obtener runners de la instancia (requiere permisos de admin)
+            runners = self.gl.runners.list(scope=scope, get_all=True)
+            result = []
+            
+            for runner in runners:
+                # El list() puede no devolver tags, hacer GET individual
+                try:
+                    runner_detail = self.gl.runners.get(runner.id)
+                    tags = runner_detail._attrs.get('tag_list', [])
+                    result.append({
+                        'id': runner.id,
+                        'description': getattr(runner, 'description', ''),
+                        'active': getattr(runner, 'active', False),
+                        'is_shared': getattr(runner, 'is_shared', False),
+                        'online': getattr(runner, 'online', False),
+                        'status': getattr(runner, 'status', 'unknown'),
+                        'tags': tags,
+                    })
+                except gitlab.exceptions.GitlabGetError:
+                    # Si no se puede obtener el detalle, agregar sin tags
+                    result.append({
+                        'id': runner.id,
+                        'description': getattr(runner, 'description', ''),
+                        'active': getattr(runner, 'active', False),
+                        'is_shared': getattr(runner, 'is_shared', False),
+                        'online': getattr(runner, 'online', False),
+                        'status': getattr(runner, 'status', 'unknown'),
+                        'tags': [],
+                    })
+            return result
+        except (gitlab.exceptions.GitlabGetError, gitlab.exceptions.GitlabListError):
+            # Si falla (sin permisos admin), retornar lista vacía
+            return []
+    
+    def get_group_runners(self, group_id) -> List[Dict[str, Any]]:
+        """
+        Obtiene los runners disponibles en un grupo
+        
+        Args:
+            group_id: ID del grupo (numérico o ruta)
+            
+        Returns:
+            Lista de runners del grupo
+        """
+        try:
+            group = self.gl.groups.get(group_id)
+            runners = group.runners.list(get_all=True)
+            result = []
+            
+            for runner in runners:
+                # El list() no devuelve tags, necesitamos hacer GET individual
+                try:
+                    runner_detail = self.gl.runners.get(runner.id)
+                    tags = runner_detail._attrs.get('tag_list', [])
+                    result.append({
+                        'id': runner.id,
+                        'description': getattr(runner, 'description', ''),
+                        'active': getattr(runner, 'active', False),
+                        'is_shared': getattr(runner, 'is_shared', False),
+                        'online': getattr(runner, 'online', False),
+                        'status': getattr(runner, 'status', 'unknown'),
+                        'tags': tags,
+                    })
+                except gitlab.exceptions.GitlabGetError:
+                    # Si no se puede obtener el detalle, agregar sin tags
+                    result.append({
+                        'id': runner.id,
+                        'description': getattr(runner, 'description', ''),
+                        'active': getattr(runner, 'active', False),
+                        'is_shared': getattr(runner, 'is_shared', False),
+                        'online': getattr(runner, 'online', False),
+                        'status': getattr(runner, 'status', 'unknown'),
+                        'tags': [],
+                    })
+            return result
+        except (gitlab.exceptions.GitlabGetError, gitlab.exceptions.GitlabListError):
+            return []
+    
+    def get_project_runners(self, project_id) -> List[Dict[str, Any]]:
+        """
+        Obtiene los runners disponibles para un proyecto
+        
+        Args:
+            project_id: ID del proyecto (numérico o ruta)
+            
+        Returns:
+            Lista de runners disponibles para el proyecto
+        """
+        try:
+            project = self._get_project_safe(project_id)
+            runners = project.runners.list(get_all=True)
+            result = []
+            
+            for runner in runners:
+                # El list() no devuelve tags, hacer GET individual
+                try:
+                    runner_detail = self.gl.runners.get(runner.id)
+                    tags = runner_detail._attrs.get('tag_list', [])
+                    result.append({
+                        'id': runner.id,
+                        'description': getattr(runner, 'description', ''),
+                        'active': getattr(runner, 'active', False),
+                        'is_shared': getattr(runner, 'is_shared', False),
+                        'online': getattr(runner, 'online', False),
+                        'status': getattr(runner, 'status', 'unknown'),
+                        'tags': tags,
+                    })
+                except gitlab.exceptions.GitlabGetError:
+                    # Si no se puede obtener el detalle, agregar sin tags
+                    result.append({
+                        'id': runner.id,
+                        'description': getattr(runner, 'description', ''),
+                        'active': getattr(runner, 'active', False),
+                        'is_shared': getattr(runner, 'is_shared', False),
+                        'online': getattr(runner, 'online', False),
+                        'status': getattr(runner, 'status', 'unknown'),
+                        'tags': [],
+                    })
+            return result
+        except (gitlab.exceptions.GitlabGetError, gitlab.exceptions.GitlabListError):
+            return []

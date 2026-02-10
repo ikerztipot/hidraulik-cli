@@ -234,11 +234,18 @@ class TemplateManager:
                 matches = re.findall(pattern, template_content)
                 all_vars.update(matches)
         
+        # Variables de loop internas de Jinja2 que no deben pedirse al usuario
+        jinja_loop_vars = {'env', 'component', 'tag', 'idx', 'item', 'key', 'value', 'index', 'loop'}
+        
         # Clasificar variables
         template_vars = []
         cicd_vars = []
         
         for var in sorted(all_vars):
+            # Ignorar variables de loop de Jinja2
+            if var in jinja_loop_vars:
+                continue
+            
             if var.startswith('CICD_'):
                 cicd_vars.append(var)
             else:
@@ -276,3 +283,73 @@ class TemplateManager:
         except Exception as e:
             console.print(f"[yellow]⚠[/yellow] No se pudo cargar archivos remotos: {e}")
             return []
+    
+    def extract_variables_from_includes(self, templates: Dict[str, str], gitlab_url: str, token: str, ref: str = 'main') -> List[str]:
+        """Extrae variables requeridas por archivos remotos incluidos en las plantillas.
+        
+        Las variables deben estar marcadas con comentarios especiales en los includes:
+        # @requires: VAR1, VAR2, VAR3
+        
+        Args:
+            templates: Diccionario con plantillas cargadas
+            gitlab_url: URL de GitLab
+            token: Token de acceso
+            ref: Rama o tag del repositorio
+            
+        Returns:
+            Lista de variables únicas encontradas en archivos incluidos
+        """
+        include_vars = set()
+        
+        try:
+            gl = gitlab.Gitlab(gitlab_url, private_token=token)
+            gl.auth()
+            project = gl.projects.get(self.template_repo_path)
+            
+            # Debug: listar todos los archivos del repositorio
+            console.print(f"[dim]    → Listando archivos del repositorio...[/dim]")
+            try:
+                tree = project.repository_tree(recursive=True, ref=ref, get_all=True)
+                include_files = [item['path'] for item in tree if item['path'].startswith('include')]
+                if include_files:
+                    console.print(f"[dim]    → Archivos encontrados en includes: {', '.join(include_files)}[/dim]")
+                else:
+                    console.print(f"[yellow]    ⚠ No hay archivos en carpetas include*[/yellow]")
+            except Exception as e:
+                console.print(f"[dim]    → No se pudo listar: {str(e)[:50]}[/dim]")
+            
+            # Buscar includes en las plantillas
+            for template_content in templates.values():
+                # Detectar includes remotos: file: '/includes/...'
+                include_pattern = r"file:\s*['\"](/includes/[^'\"]+)['\"]"
+                includes = re.findall(include_pattern, template_content)
+                
+                for include_path in includes:
+                    try:
+                        # Limpiar el path (remover / inicial)
+                        clean_path = include_path.lstrip('/')
+                        console.print(f"[dim]    → Buscando: {clean_path} (rama: {ref})[/dim]")
+                        
+                        # Descargar el archivo incluido
+                        file_content = project.files.get(file_path=clean_path, ref=ref)
+                        content = file_content.decode().decode('utf-8')
+                        
+                        # Buscar comentarios @requires
+                        # Formato: # @requires: VAR1, VAR2, VAR3
+                        requires_pattern = r'#\s*@requires?:\s*([A-Z_][A-Z0-9_,\s]*)'
+                        matches = re.findall(requires_pattern, content, re.IGNORECASE)
+                        
+                        for match in matches:
+                            # Separar variables por comas y limpiar espacios
+                            vars_list = [v.strip() for v in match.split(',') if v.strip()]
+                            include_vars.update(vars_list)
+                            
+                        console.print(f"[dim]    ✓ Analizado: {clean_path}[/dim]")
+                            
+                    except Exception as e:
+                        console.print(f"[dim]    → No se pudo analizar {include_path}: {str(e)[:50]}[/dim]")
+                        
+        except Exception as e:
+            console.print(f"[dim]    → Error analizando includes remotos: {str(e)[:50]}[/dim]")
+        
+        return sorted(list(include_vars))

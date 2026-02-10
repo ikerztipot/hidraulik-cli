@@ -5,6 +5,49 @@ Todos los cambios notables en este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [0.4.0] - 2026-02-10
+
+### Añadido
+- **Detección automática de runners de GitLab**: Obtiene tags de runners disponibles desde la instancia
+- Método `get_available_runners()` en GitLabClient para obtener runners de la instancia
+- Método `get_group_runners()` para obtener runners de grupos específicos
+- Método `get_project_runners()` para obtener runners de proyectos
+- Función helper `get_available_runner_tags()` que recopila todos los tags de runners disponibles
+- **Selección interactiva de runner tags** con múltiples métodos:
+  - Por números (ej: `1,3,5`)
+  - Por nombres (ej: `buildkit,scaleway,worko-internal`)
+  - Usando valores sugeridos por defecto
+- Función `select_runner_tags_interactive()` con interfaz visual mejorada
+- Nueva variable de plantilla `components` para proyectos multi-componente (web, cms, api, etc.)
+- Nueva variable `tag_prefix` para prefijos de tags de release (wkhs, acme, etc.)
+- Plantilla `.gitlab-ci.yml.j2` multi-componente dinámica con loops Jinja2
+- Include remoto `.build-buildkit-scaleway.yml` para builds con BuildKit
+- Documentación completa en `docs/TEMPLATE_REPO_STRUCTURE.md`
+- Documentación de ejemplo interactivo en `docs/INTERACTIVE_EXAMPLE.md`
+- Tests unitarios para funciones de runners
+- Archivo de ejemplo `examples/includes/.build-buildkit-scaleway.yml`
+- Archivo de ejemplo `examples/.gitlab-ci.yml.example` con pipeline completo
+
+### Cambiado
+- El comando `create` ahora solicita componentes a desplegar de forma interactiva
+- La selección de runner tags es visual e interactiva (no manual)
+- Las variables `runner_tags` se obtienen dinámicamente de GitLab (no hardcodeadas)
+- Feedback visual mejorado durante `init` con mensajes de progreso
+- Búsqueda de proyectos similares ahora es opcional y limitada (optimización de performance)
+
+### Mejorado
+- Mensajes de progreso claros durante `init`: "Conectando...", "Verificando...", etc.
+- Mejor manejo de errores con sugerencias contextuales
+- Experiencia de usuario más fluida con selección visual de opciones
+- Mayor flexibilidad para arquitecturas multi-componente
+- Documentación expandida con ejemplos reales de uso
+
+### Técnico
+- Separación de lógica de obtención de runners en funciones reutilizables
+- Manejo robusto de fallos de permisos al obtener runners
+- Soporte para runners a nivel de instancia, grupo y proyecto
+- Agregación automática de tags únicos desde múltiples fuentes
+
 ## [0.3.0] - 2025-11-05
 
 ### Añadido

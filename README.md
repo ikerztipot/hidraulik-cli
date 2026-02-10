@@ -10,8 +10,7 @@ Un CLI potente y flexible para generar automáticamente configuraciones de CI/CD
 - [Uso Rápido](#-uso-rápido)
 - [Comandos Disponibles](#-comandos-disponibles)
 - [Repositorio de Plantillas](#-repositorio-de-plantillas)
-- [Variables en Plantillas](#-variables-en-plantillas)
-- [Configuración de GitLab](#-configuración-de-gitlab)
+- [Variables en Plantillas](#-variables-en-plantillas)- [Ejemplos Completos](#-ejemplos-completos)- [Configuración de GitLab](#-configuración-de-gitlab)
 - [Desarrollo](#-desarrollo)
 - [Contribuir](#-contribuir)
 
@@ -82,10 +81,15 @@ gitlab-cicd create clients/acme/mi-app \
 
 El CLI:
 1. Detecta automáticamente los clusters disponibles (GitLab Agents)
-2. Te permite seleccionar el cluster para cada entorno
-3. Carga las plantillas desde el repositorio
-4. Solicita valores para variables
-5. Genera y commit los archivos al proyecto
+2. Carga las plantillas desde el repositorio
+3. **Obtiene runners disponibles de GitLab** (tags de runners activos)
+4. Solicita configuración interactiva:
+   - Componentes a desplegar (web, cms, api, etc.)
+   - **Selección de runner tags** (desde lista de runners disponibles)
+   - Prefijo para tags de release (wkhs, acme, etc.)
+   - Cluster para cada entorno
+5. Solicita valores para variables personalizadas
+6. Genera y commit los archivos al proyecto
 
 ### 3. Listar plantillas disponibles
 
@@ -249,6 +253,8 @@ deploy:{{ env }}:
 
 **`includes/.build-buildkit-scaleway.yml`** (sin extensión `.j2`):
 ```yaml
+# @requires: PACKAGE_NAME, DOCKERFILE_PATH
+
 .build-buildkit:
   stage: build
   image:
@@ -267,6 +273,16 @@ deploy:{{ env }}:
 - ✅ Sin duplicación de código
 - ✅ Actualiza una vez, afecta todos los proyectos
 - ✅ Versionado con tags/branches
+
+**Detección Automática de Variables:**
+
+El CLI analiza automáticamente los archivos de remote includes para detectar variables requeridas mediante el comentario especial `# @requires:`.
+
+Cuando se encuentra este comentario, el CLI:
+1. Descarga el archivo desde el repositorio de plantillas
+2. Extrae las variables listadas después de `@requires:`
+3. Las solicita al usuario durante la creación del pipeline
+4. Las configura automáticamente como variables CI/CD en GitLab
 
 ## 🔑 Variables en Plantillas
 
@@ -332,6 +348,401 @@ CICD_API_KEY: sk_live_xxxxx
   ¿Marcar CICD_API_KEY como enmascarada? [Y/n]: y
 ```
 
+### Variables Automáticas Proporcionadas por el CLI
+
+El CLI inyecta automáticamente estas variables en todas las plantillas sin solicitar al usuario:
+
+| Variable | Descripción | Ejemplo | Origen |
+|----------|-------------|---------|--------|
+| `project_name` | Nombre del proyecto GitLab | `web-app` | Extraído del último segmento de `project_path` |
+| `project_path` | Ruta completa del proyecto | `clients/workoholics/web-app` | Argumento del comando `create` |
+| `namespace` | Namespace de Kubernetes | `wkhs` | Opción `--namespace` |
+| `environments` | Lista de entornos | `['pre', 'prod']` | Opción `--environments` |
+| `template_repo` | Repositorio de plantillas | `clients/infrastructure` | Configuración almacenada en `config.json` |
+| `components` | Componentes a desplegar | `['web', 'cms']` | Prompt interactivo |
+| `runner_tags` | Tags de runners GitLab | `['buildkit', 'scaleway']` | Selección interactiva desde GitLab API |
+| `tag_prefix` | Prefijo para tags de releases | `wkhs` | Prompt interactivo con smart default |
+
+### Buenas Prácticas
+
+**Variables de Plantilla - Usar para:**
+- ✅ Nombres de proyecto, namespace, ambiente
+- ✅ Configuraciones de estructura (réplicas, puertos)
+- ✅ Referencias a recursos (nombres de deployments, services)
+- ✅ Valores que no cambian después del setup inicial
+
+**Variables CI/CD - Usar para:**
+- ✅ Credenciales (tokens, passwords, API keys)
+- ✅ URLs de servicios externos
+- ✅ Configuraciones que pueden cambiar sin modificar archivos
+- ✅ Secretos y datos sensibles
+- ✅ Referencias a clusters, contextos, registros
+
+**Protección de Variables:**
+- **Protegidas:** Solo disponibles en ramas/tags protegidos (recomendado para producción)
+- **Enmascaradas:** Su valor se oculta en los logs (recomendado para todos los secretos)
+
+## 📖 Ejemplos Completos
+
+### Ejemplo 1: Sesión Interactiva Completa
+
+Este ejemplo muestra una sesión completa de uso del CLI con todas las interacciones.
+
+#### Comando Inicial
+
+```bash
+gitlab-cicd create clients/workoholics/web-app \
+  --namespace wkhs \
+  --environments pre,prod \
+  --create-project
+```
+
+#### Salida del CLI
+
+```
+╭────────────────────────────────────────╮
+│ Creando CI/CD para clients/workoholics/web-app │
+╰────────────────────────────────────────╯
+
+✓ Conectado a GitLab
+✓ Proyecto listo: https://gitlab.workoholics.es/clients/workoholics/web-app
+
+Obteniendo clusters disponibles...
+  ✓ clients/internal-infrastructure/cicd-templates:scaleway-internal-worko-pre
+  ✓ clients/internal-infrastructure/cicd-templates:scaleway-internal-worko-prod
+
+Cargando plantillas desde: clients/internal-infrastructure/cicd-templates
+✓ Plantillas cargadas: 8 archivos
+
+Analizando variables de las plantillas...
+  • Variables de plantilla: project_name, project_path, namespace, environments, components, runner_tags, tag_prefix
+  • Variables CI/CD (se guardarán en GitLab): CICD_DOCKER_REGISTRY, CICD_REGISTRY_USER, CICD_REGISTRY_PASSWORD
+
+Obteniendo runners disponibles...
+✓ Encontrados 5 runners con 8 tags
+
+Configuración del Pipeline
+
+Componentes a desplegar (separados por coma) [web]: web,cms
+
+Runners disponibles:
+  1. Runner #97 - Scaleway BuildKit
+     Tags: buildkit, scaleway, worko-internal
+  2. Runner #85 - Docker Production
+     Tags: docker, production
+  3. Runner #72 - Kubernetes Staging
+     Tags: kubernetes, staging
+
+Selecciona un runner (número) [1]: 1
+✓ Runner seleccionado: Runner #97
+✓ Tags del runner: buildkit, scaleway, worko-internal
+
+Prefijo para tags de release (ej: wkhs, acme) [web]: wkhs
+
+Configuración de KUBE_CONTEXT por entorno:
+
+Entorno: pre
+Clusters disponibles:
+  1. clients/internal-infrastructure/cicd-templates:scaleway-internal-worko-pre
+  2. clients/internal-infrastructure/cicd-templates:scaleway-internal-worko-prod
+Selecciona el cluster para pre (número o ingresa manualmente) [1]: 1
+✓ KUBE_CONTEXT para pre: clients/internal-infrastructure/cicd-templates:scaleway-internal-worko-pre
+
+Entorno: prod
+Clusters disponibles:
+  1. clients/internal-infrastructure/cicd-templates:scaleway-internal-worko-pre
+  2. clients/internal-infrastructure/cicd-templates:scaleway-internal-worko-prod
+Selecciona el cluster para prod (número o ingresa manualmente) [2]: 2
+✓ KUBE_CONTEXT para prod: clients/internal-infrastructure/cicd-templates:scaleway-internal-worko-prod
+
+Analizando includes remotos...
+  ✓ Analizado: includes/.build-buildkit-scaleway.yml
+  • Variables en includes remotos: PACKAGE_NAME, DOCKERFILE_PATH
+
+Información requerida para las plantillas:
+(No hay variables adicionales requeridas)
+
+Valores para variables CI/CD:
+Estas variables se guardarán en la configuración de GitLab
+
+CICD_DOCKER_REGISTRY: registry.workoholics.es
+  ¿Marcar CICD_DOCKER_REGISTRY como protegida? [y/N]: n
+  ¿Marcar CICD_DOCKER_REGISTRY como enmascarada? [y/N]: n
+
+CICD_REGISTRY_USER: ci-deployer
+  ¿Marcar CICD_REGISTRY_USER como protegida? [y/N]: y
+  ¿Marcar CICD_REGISTRY_USER como enmascarada? [y/N]: n
+
+CICD_REGISTRY_PASSWORD: ••••••••
+  ¿Marcar CICD_REGISTRY_PASSWORD como protegida? [y/N]: y
+  ¿Marcar CICD_REGISTRY_PASSWORD como enmascarada? [y/N]: y
+
+Generando archivos del CI/CD...
+✓ Procesadas 1 plantillas de pipeline
+✓ Procesadas 8 plantillas de Kubernetes
+✓ Procesadas 0 plantillas de Helm
+✓ Procesadas 0 configuraciones adicionales
+
+Commiteando archivos al repositorio...
+✓ .gitlab-ci.yml
+✓ k8s/web/02-secrets.yaml
+✓ k8s/web/03-configs.yaml
+✓ k8s/web/04-deployment.yaml
+✓ k8s/web/05-ingress.yaml
+✓ k8s/cms/02-secrets.yaml
+✓ k8s/cms/03-configs.yaml
+✓ k8s/cms/04-deployment.yaml
+✓ k8s/cms/05-ingress.yaml
+
+Configurando variables CI/CD en GitLab...
+✓ Variable CICD_DOCKER_REGISTRY configurada
+✓ Variable CICD_REGISTRY_USER configurada (protegida)
+✓ Variable CICD_REGISTRY_PASSWORD configurada (protegida, enmascarada)
+
+Configurando variables KUBE_CONTEXT por entorno...
+✓ Variable KUBE_CONTEXT configurada para entorno: pre
+✓ Variable KUBE_CONTEXT configurada para entorno: prod
+
+╭───────────────────────────────────────╮
+│ ✅ CI/CD configurado exitosamente     │
+╰───────────────────────────────────────╯
+
+Pipeline generado con:
+  • 2 componentes: web, cms
+  • 2 ambientes: pre, prod
+  • 6 stages: build-web, deploy-web-pre, deploy-web-prod, build-cms, deploy-cms-pre, deploy-cms-prod
+  • 3 runner tags: buildkit, scaleway, worko-internal
+
+Ver pipeline en:
+  https://gitlab.workoholics.es/clients/workoholics/web-app/-/pipelines
+
+Próximos pasos:
+  1️⃣  Revisa los archivos generados en el repositorio
+  2️⃣  Crea un tag para activar el pipeline:
+      git tag wkhs-web-v1.0.0 && git push --tags
+      git tag wkhs-cms-v1.0.0 && git push --tags
+  3️⃣  Verifica el estado del pipeline con:
+      gitlab-cicd status clients/workoholics/web-app
+```
+
+### Ejemplo 2: Plantilla Completa con Variables y Remote Includes
+
+#### Plantilla: `pipeline/.gitlab-ci.yml.j2`
+
+```yaml
+# GitLab CI/CD para {{ project_name }}
+# Generado con gitlab-cicd-creator
+# Repositorio: {{ project_path }}
+
+# Incluir bloques reutilizables desde el repositorio de plantillas
+include:
+  - project: '{{ template_repo }}'
+    ref: main
+    file: 
+      - '/includes/.build-buildkit-scaleway.yml'
+      - '/includes/.deploy-k8s.yml'
+
+default:
+  tags:
+{%- for tag in runner_tags %}
+    - {{ tag }}
+{%- endfor %}
+
+stages:
+{%- for component in components %}
+  - build-{{ component }}
+{%- for env in environments %}
+  - deploy-{{ component }}-{{ env }}
+{%- endfor %}
+{%- endfor %}
+
+variables:
+  PROJECT_PATH: {{ project_path }}
+  NAMESPACE: {{ namespace }}
+  TAG_PREFIX: {{ tag_prefix }}
+
+# ============================================
+# BUILD STAGES - Por cada componente
+# ============================================
+{%- for component in components %}
+
+build-{{ component }}:
+  extends: .build-buildkit-scaleway  # Definido en includes/
+  stage: build-{{ component }}
+  variables:
+    PACKAGE_NAME: {{ component }}
+    DOCKERFILE_PATH: docker/{{ component }}/Dockerfile
+  only:
+    refs:
+      - tags
+    variables:
+      - $CI_COMMIT_TAG =~ /^${TAG_PREFIX}-{{ component }}-v.*/
+
+{%- endfor %}
+
+# ============================================
+# DEPLOY STAGES - Por cada componente y entorno
+# ============================================
+{%- for component in components %}
+{%- for env in environments %}
+
+deploy-{{ component }}-{{ env }}:
+  extends: .deploy-k8s  # Definido en includes/
+  stage: deploy-{{ component }}-{{ env }}
+  variables:
+    COMPONENT: {{ component }}
+    ENVIRONMENT: {{ env }}
+    MANIFESTS_PATH: k8s/{{ component }}
+  environment:
+    name: {{ env }}/{{ component }}
+    url: https://{{ component }}.{{ env }}.$DOMAIN
+  only:
+    refs:
+      - tags
+    variables:
+      - $CI_COMMIT_TAG =~ /^${TAG_PREFIX}-{{ component }}-v.*/
+  {%- if env == environments[-1] %}
+  when: manual
+  {%- endif %}
+
+{%- endfor %}
+{%- endfor %}
+```
+
+#### Archivo Generado: `.gitlab-ci.yml`
+
+```yaml
+# GitLab CI/CD para web-app
+# Generado con gitlab-cicd-creator
+# Repositorio: clients/workoholics/web-app
+
+include:
+  - project: 'clients/internal-infrastructure/cicd-templates'
+    ref: main
+    file: 
+      - '/includes/.build-buildkit-scaleway.yml'
+      - '/includes/.deploy-k8s.yml'
+
+default:
+  tags:
+    - buildkit
+    - scaleway
+    - worko-internal
+
+stages:
+  - build-web
+  - deploy-web-pre
+  - deploy-web-prod
+  - build-cms
+  - deploy-cms-pre
+  - deploy-cms-prod
+
+variables:
+  PROJECT_PATH: clients/workoholics/web-app
+  NAMESPACE: wkhs
+  TAG_PREFIX: wkhs
+
+# BUILD STAGES
+build-web:
+  extends: .build-buildkit-scaleway
+  stage: build-web
+  variables:
+    PACKAGE_NAME: web
+    DOCKERFILE_PATH: docker/web/Dockerfile
+  only:
+    refs:
+      - tags
+    variables:
+      - $CI_COMMIT_TAG =~ /^${TAG_PREFIX}-web-v.*/
+
+build-cms:
+  extends: .build-buildkit-scaleway
+  stage: build-cms
+  variables:
+    PACKAGE_NAME: cms
+    DOCKERFILE_PATH: docker/cms/Dockerfile
+  only:
+    refs:
+      - tags
+    variables:
+      - $CI_COMMIT_TAG =~ /^${TAG_PREFIX}-cms-v.*/
+
+# DEPLOY STAGES
+deploy-web-pre:
+  extends: .deploy-k8s
+  stage: deploy-web-pre
+  variables:
+    COMPONENT: web
+    ENVIRONMENT: pre
+    MANIFESTS_PATH: k8s/web
+  environment:
+    name: pre/web
+    url: https://web.pre.$DOMAIN
+  only:
+    refs:
+      - tags
+    variables:
+      - $CI_COMMIT_TAG =~ /^${TAG_PREFIX}-web-v.*/
+
+deploy-web-prod:
+  extends: .deploy-k8s
+  stage: deploy-web-prod
+  variables:
+    COMPONENT: web
+    ENVIRONMENT: prod
+    MANIFESTS_PATH: k8s/web
+  environment:
+    name: prod/web
+    url: https://web.prod.$DOMAIN
+  only:
+    refs:
+      - tags
+    variables:
+      - $CI_COMMIT_TAG =~ /^${TAG_PREFIX}-web-v.*/
+  when: manual
+
+# ... (deploy-cms-pre, deploy-cms-prod similar)
+```
+
+### Ejemplo 3: Detección Automática de Runners
+
+El CLI obtiene automáticamente los runners disponibles desde GitLab en tres niveles:
+
+1. **Runners de la instancia** (si tienes permisos de admin)
+2. **Runners del grupo** (ancestros del proyecto)
+3. **Runners del proyecto** (específicos del proyecto)
+
+```bash
+Obteniendo runners disponibles...
+  • Buscando runners de la instancia...
+    ✓ Encontrados 3 runners
+  • Buscando runners del grupo clients/...
+    ✓ Encontrados 2 runners
+  • Buscando runners del proyecto...
+    ✓ Encontrados 0 runners
+
+Runners disponibles:
+  1. Runner #97 - Scaleway BuildKit (instancia)
+     Tags: buildkit, scaleway, worko-internal
+     
+  2. Runner #85 - Docker Prod (instancia)
+     Tags: docker, production, linux
+     
+  3. Runner #72 - K8s Staging (grupo)
+     Tags: kubernetes, staging, scaleway
+     
+  4. Runner #58 - General Purpose (grupo)
+     Tags: docker, general
+
+Selecciona un runner (número) [1]: 1
+```
+
+**Ventajas:**
+- ✅ No necesitas conocer los tags de antemano
+- ✅ Solo muestra runners activos y disponibles
+- ✅ Garantiza compatibilidad con la infraestructura existente
+- ✅ Sel eccionas un runner completo con todos sus tags al mismo tiempo
+
 ## ⚙️ Configuración de GitLab
 
 ### Obtener Token de Acceso
@@ -396,13 +807,165 @@ gitlab-repo-cicd-creator-cli/
 
 ## 🤝 Contribuir
 
-Las contribuciones son bienvenidas:
+¡Gracias por tu interés en contribuir a GitLab CI/CD Creator!
 
-1. Fork del proyecto
-2. Crea una rama (`git checkout -b feature/AmazingFeature`)
-3. Commit cambios (`git commit -m 'Add AmazingFeature'`)
-4. Push (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
+### Proceso de Contribución
+
+1. **Fork** el repositorio
+2. **Clona** tu fork:
+   ```bash
+   git clone https://github.com/TU-USUARIO/gitlab-repo-cicd-creator-cli.git
+   cd gitlab-repo-cicd-creator-cli
+   ```
+3. **Crea una rama** para tu feature:
+   ```bash
+   git checkout -b feature/mi-feature
+   ```
+4. **Haz cambios** siguiendo las guías de estilo
+5. **Ejecuta tests** y verifica que pasen:
+   ```bash
+   make test
+   make lint
+   ```
+6. **Commit** tus cambios con un mensaje descriptivo:
+   ```bash
+   git commit -m 'Add: mi feature'
+   ```
+7. **Push** a tu fork:
+   ```bash
+   git push origin feature/mi-feature
+   ```
+8. **Abre un Pull Request** desde GitHub/GitLab
+
+### Configuración de Desarrollo
+
+```bash
+# Crear y activar entorno virtual
+python -m venv venv
+source venv/bin/activate  # En Windows: venv\Scripts\activate
+
+# Instalar en modo desarrollo con dependencias de testing
+pip install -e ".[dev]"
+```
+
+### Estándares de Código
+
+**Python:**
+- Estilo: PEP 8
+- Longitud de línea: 100 caracteres
+- Formateador: Black
+- Organización de imports: isort
+- Type hints: Requeridos para funciones públicas
+
+**Formateo:**
+```bash
+make format  # Ejecuta black + isort automáticamente
+make lint    # Verifica con flake8 + mypy
+```
+
+### Tests
+
+```bash
+make test          # Ejecutar todos los tests
+make test-cov      # Tests con reporte de cobertura en htmlcov/
+```
+
+**Escribir Tests:**
+- Usa `pytest` como framework
+- Mock las llamadas a GitLab API usando `unittest.mock`
+- Usa `click.testing.CliRunner` para tests del CLI
+- Cobertura mínima esperada: 80%
+
+**Ejemplo:**
+```python
+from click.testing import CliRunner
+from gitlab_cicd_creator.cli import cli
+
+def test_init_command():
+    runner = CliRunner()
+    result = runner.invoke(cli, ['init'], input='https://gitlab.com\ntoken\norg/repo\n')
+    assert result.exit_code == 0
+    assert 'Configuración guardada' in result.output
+```
+
+### Estructura de Commits
+
+Usa el siguiente formato para mensajes de commit:
+
+```
+<tipo>: <descripción corta>
+
+<descripción detallada opcional>
+```
+
+**Tipos de commit:**
+- `Add:` Nueva funcionalidad
+- `Fix:` Corrección de bugs
+- `Docs:` Cambios en documentación
+- `Style:` Formateo, sin cambios en lógica
+- `Refactor:` Refactorización de código
+- `Test:` Añadir o modificar tests
+- `Chore:` Actualización de dependencias, builds
+
+**Ejemplos:**
+```
+Add: soporte para remote includes dinámicos
+
+- Añadida variable template_repo a variables automáticas
+- Actualizada documentación con ejemplos
+- Tests añadidos para nueva funcionalidad
+
+Fix: corrección en detección de runner tags
+
+El método runners.list() no incluía tags en la respuesta.
+Cambiado a runners.get(id) individual para obtener tag_list.
+
+Docs: actualización de README con ejemplos de uso
+```
+
+### Reportar Issues
+
+Al reportar un bug, incluye:
+- Versión de Python: `python --version`
+- Versión del CLI: `gitlab-cicd --version`
+- Comando ejecutado
+- Output completo del error
+- Pasos para reproducir el problema
+
+**Ejemplo de issue:**
+```markdown
+## Bug: Error al crear proyecto con namespace especial
+
+**Ambiente:**
+- Python: 3.11.2
+- CLI: v1.2.3
+- GitLab: self-hosted 15.8
+
+**Comando:**
+```bash
+gitlab-cicd create my-group/my-project --namespace my_namespace
+```
+
+**Error:**
+```
+ValueError: Invalid namespace format
+```
+
+**Pasos para reproducir:**
+1. Ejecutar `gitlab-cicd init` con configuración válida
+2. Ejecutar comando de create con namespace que contiene underscore
+3. Error aparece
+
+**Comportamiento esperado:**
+El namespace debería aceptarse o mostrar un mensaje de error más claro.
+```
+
+### Preguntas y Sugerencias
+
+Si tienes preguntas o sugerencias:
+- Abre un issue con la etiqueta `question` o `enhancement`
+- Describe claramente tu caso de uso
+- Si es una nueva funcionalidad, explica por qué sería útil
 
 ## 📄 Licencia
 
