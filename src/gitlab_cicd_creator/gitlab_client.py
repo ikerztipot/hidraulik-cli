@@ -257,30 +257,52 @@ class GitLabClient:
         # Buscar si existe la variable con el mismo key Y scope
         # GitLab permite múltiples variables con el mismo key pero diferentes scopes
         existing_var = None
+        
         try:
+            # Listar todas las variables y filtrar manualmente
+            # Esto es necesario porque cuando hay múltiples variables con el mismo key
+            # pero diferentes scopes, project.variables.get() lanza error 409
             all_vars = project.variables.list(get_all=True)
             for var in all_vars:
                 if var.key == key and var.environment_scope == environment_scope:
                     existing_var = var
                     break
-        except gitlab.exceptions.GitlabGetError:
+        except Exception as e:
+            # Si falla al listar, continuar para intentar crear
             pass
         
-        if existing_var:
-            # Actualizar variable existente
-            existing_var.value = value
-            existing_var.protected = protected
-            existing_var.masked = masked
-            existing_var.save()
-        else:
-            # Crear nueva variable
-            project.variables.create({
-                'key': key,
-                'value': value,
-                'protected': protected,
-                'masked': masked,
-                'environment_scope': environment_scope,
-            })
+        try:
+            if existing_var:
+                # Actualizar variable existente
+                existing_var.value = value
+                existing_var.protected = protected
+                existing_var.masked = masked
+                existing_var.save()
+            else:
+                # Crear nueva variable
+                project.variables.create({
+                    'key': key,
+                    'value': value,
+                    'protected': protected,
+                    'masked': masked,
+                    'environment_scope': environment_scope,
+                })
+        except gitlab.exceptions.GitlabCreateError as e:
+            # Si hay error al crear (ej: ya existe), intentar actualizarla
+            if '409' in str(e) or 'already exists' in str(e).lower():
+                # Buscar la variable específica y actualizarla
+                try:
+                    all_vars = project.variables.list(get_all=True)
+                    for var in all_vars:
+                        if var.key == key and var.environment_scope == environment_scope:
+                            var.value = value
+                            var.protected = protected
+                            var.masked = masked
+                            var.save()
+                            return
+                except Exception:
+                    pass
+            raise
     
     def get_variables(self, project_id) -> List[Dict[str, Any]]:
         """

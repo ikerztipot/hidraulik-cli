@@ -94,11 +94,15 @@ class TemplateManager:
                     # Obtener contenido del archivo
                     file_content = project.files.get(file_path=file_path, ref=ref)
                     content = file_content.decode().decode('utf-8')
-                    templates[file_path] = content
-                    self.template_types[file_path] = template_type
+                    
+                    # Calcular ruta de destino (sin .j2)
+                    dest_path = self._calculate_dest_path(file_path, template_type)
+                    
+                    # Usar la ruta de destino como clave
+                    templates[dest_path] = content
+                    self.template_types[dest_path] = template_type
                     
                     # Mostrar con información de tipo
-                    dest_path = self._calculate_dest_path(file_path, template_type)
                     type_color = "cyan" if template_type != 'unknown' else "yellow"
                     console.print(f"  • Cargada: {file_path} → {dest_path} ([{type_color}]{template_type}[/{type_color}])")
                 except Exception as e:

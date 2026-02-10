@@ -317,6 +317,25 @@ deploy:{{ env }}:
 {% endfor %}
 ```
 
+**Uso condicional de Docker:**
+```yaml
+{% for component in components %}
+build-{{ component }}:
+  stage: build
+  variables:
+    PACKAGE_NAME: {{ component }}
+{%- if use_docker %}
+    DOCKERFILE_PATH: {{ dockerfile_paths[component] }}
+{%- endif %}
+  script:
+{%- if use_docker %}
+    - docker build -f $DOCKERFILE_PATH -t $IMAGE_NAME .
+{%- else %}
+    - npm run build  # o cualquier otro método de build
+{%- endif %}
+{% endfor %}
+```
+
 ### 2. Variables CI/CD (guardadas en GitLab)
 
 Variables que empiezan con `CICD_` se guardan como variables CI/CD en GitLab y **NO** se sustituyen en los archivos.
@@ -362,6 +381,8 @@ El CLI inyecta automáticamente estas variables en todas las plantillas sin soli
 | `components` | Componentes a desplegar | `['web', 'cms']` | Prompt interactivo |
 | `runner_tags` | Tags de runners GitLab | `['buildkit', 'scaleway']` | Selección interactiva desde GitLab API |
 | `tag_prefix` | Prefijo para tags de releases | `wkhs` | Prompt interactivo con smart default |
+| `use_docker` | Si el proyecto usa Docker | `True` / `False` | Prompt interactivo |
+| `dockerfile_paths` | Ruta del Dockerfile por componente | `{'web': 'Dockerfile', 'cms': 'cms/Dockerfile'}` | Prompt interactivo por cada componente |
 
 ### Buenas Prácticas
 
@@ -424,6 +445,18 @@ Obteniendo runners disponibles...
 Configuración del Pipeline
 
 Componentes a desplegar (separados por coma) [web]: web,cms
+
+¿El proyecto utiliza Docker para construir las imágenes? [Y/n]: y
+
+Configuración de Dockerfile por componente:
+
+Componente: web
+Ruta del Dockerfile para 'web' [Dockerfile]: Dockerfile
+  ✓ web: Dockerfile
+
+Componente: cms
+Ruta del Dockerfile para 'cms' [cms/Dockerfile]: cms/Dockerfile
+  ✓ cms: cms/Dockerfile
 
 Runners disponibles:
   1. Runner #97 - Scaleway BuildKit
@@ -571,7 +604,9 @@ build-{{ component }}:
   stage: build-{{ component }}
   variables:
     PACKAGE_NAME: {{ component }}
-    DOCKERFILE_PATH: docker/{{ component }}/Dockerfile
+{%- if use_docker %}
+    DOCKERFILE_PATH: {{ dockerfile_paths[component] }}
+{%- endif %}
   only:
     refs:
       - tags

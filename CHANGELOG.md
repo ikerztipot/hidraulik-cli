@@ -5,6 +5,28 @@ Todos los cambios notables en este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [Unreleased]
+
+### Añadido
+- **Configuración de Docker por componente**: Ahora el CLI pregunta si el proyecto usa Docker
+- **Rutas de Dockerfile personalizadas**: Permite especificar la ruta del Dockerfile para cada componente
+- Nueva variable de plantilla `use_docker` (booleana) que indica si el proyecto usa Docker
+- Nueva variable de plantilla `dockerfile_paths` (diccionario) con rutas de Dockerfile por componente
+- Prompt interactivo para configurar Dockerfile path por cada componente con valores por defecto inteligentes
+  - Un componente: default `Dockerfile`
+  - Múltiples componentes: default `{component}/Dockerfile`
+
+### Mejorado
+- **Mensajes de error mejorados**: Ahora los errores de autenticación y otros errores comunes muestran mensajes claros con soluciones paso a paso en lugar de tracebacks técnicos
+- Documentación actualizada en README con las nuevas variables `use_docker` y `dockerfile_paths`
+- Ejemplos de plantillas actualizados para mostrar el uso condicional de `DOCKERFILE_PATH`
+- Flujo interactivo mejorado con preguntas sobre Docker antes de la selección de runners
+
+### Corregido
+- **Extensión .j2 en archivos generados**: Ahora los archivos procesados se guardan con su extensión correcta (`.gitlab-ci.yml` en lugar de `.gitlab-ci.yml.j2`)
+- Los archivos de plantilla del repositorio remoto ahora se mapean correctamente a sus rutas de destino sin la extensión `.j2`
+- **Error 409 al crear variables con múltiples scopes**: Mejorado el manejo de variables CI/CD cuando existen múltiples variables con el mismo nombre pero diferentes `environment_scope`. Ahora busca y actualiza correctamente la variable específica por scope.
+
 ## [0.4.0] - 2026-02-10
 
 ### Añadido

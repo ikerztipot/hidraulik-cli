@@ -296,8 +296,22 @@ def create(project_path, namespace, environments, create_project):
     
     try:
         # Conectar a GitLab
-        client = GitLabClient(config.get('gitlab_url'), config.get('gitlab_token'))
-        console.print("[green]✓[/green] Conectado a GitLab")
+        try:
+            client = GitLabClient(config.get('gitlab_url'), config.get('gitlab_token'))
+            console.print("[green]✓[/green] Conectado a GitLab")
+        except Exception as auth_error:
+            error_msg = str(auth_error).lower()
+            if '401' in error_msg or 'invalid_token' in error_msg or 'unauthorized' in error_msg:
+                console.print("[red]✗[/red] Error de autenticación: Token de GitLab inválido o expirado")
+                console.print("\n[yellow]💡 Solución:[/yellow]")
+                console.print("  1. Genera un nuevo token en GitLab:")
+                console.print(f"     [cyan]{config.get('gitlab_url')}/-/user_settings/personal_access_tokens[/cyan]")
+                console.print("  2. Permisos requeridos: [bold]api[/bold], [bold]read_repository[/bold], [bold]write_repository[/bold]")
+                console.print("  3. Reinicializa la configuración:")
+                console.print("     [cyan]gitlab-cicd init[/cyan]")
+                return
+            else:
+                raise
         
         # Obtener o crear proyecto
         if create_project:
@@ -439,6 +453,25 @@ def create(project_path, namespace, environments, create_project):
         )
         components = [c.strip() for c in components_input.split(',') if c.strip()]
         
+        # Preguntar si se va a usar Docker
+        use_docker = Confirm.ask(
+            "\n¿El proyecto utiliza Docker para construir las imágenes?",
+            default=True
+        )
+        
+        # Si usa Docker, recopilar información de Dockerfile por componente
+        dockerfile_paths = {}
+        if use_docker:
+            console.print("\n[bold]Configuración de Dockerfile por componente:[/bold]")
+            for component in components:
+                console.print(f"\n[cyan]Componente: {component}[/cyan]")
+                dockerfile_path = Prompt.ask(
+                    f"Ruta del Dockerfile para '{component}'",
+                    default=f"Dockerfile" if len(components) == 1 else f"{component}/Dockerfile"
+                )
+                dockerfile_paths[component] = dockerfile_path
+                console.print(f"  [green]✓[/green] {component}: {dockerfile_path}")
+        
         # Selección de runner
         default_runner_tags = ['buildkit', 'scaleway', 'worko-internal']
         runner_tags = select_runner_interactive(available_runners, default_runner_tags)
@@ -495,6 +528,8 @@ def create(project_path, namespace, environments, create_project):
             'components': components,
             'runner_tags': runner_tags,
             'tag_prefix': tag_prefix,
+            'use_docker': use_docker,
+            'dockerfile_paths': dockerfile_paths,
         }
         
         # Verificar qué variables de includes ya están cubiertas
@@ -612,9 +647,25 @@ def create(project_path, namespace, environments, create_project):
         console.print(f"\n[bold green]✓ CI/CD configurado exitosamente![/bold green]")
         console.print(f"\nPuedes ver el pipeline en: {project['web_url']}/-/pipelines")
         
+    except gitlab.exceptions.GitlabAuthenticationError as e:
+        console.print("[red]✗[/red] Error de autenticación: Token de GitLab inválido o expirado")
+        console.print("\n[yellow]💡 Solución:[/yellow]")
+        console.print("  1. Genera un nuevo token en GitLab:")
+        console.print(f"     [cyan]{config.get('gitlab_url')}/-/user_settings/personal_access_tokens[/cyan]")
+        console.print("  2. Permisos requeridos: [bold]api[/bold], [bold]read_repository[/bold], [bold]write_repository[/bold]")
+        console.print("  3. Reinicializa la configuración:")
+        console.print("     [cyan]gitlab-cicd init[/cyan]")
+    except gitlab.exceptions.GitlabGetError as e:
+        if "404" in str(e):
+            console.print(f"[red]✗[/red] No se encontró el recurso solicitado")
+            console.print("[yellow]💡[/yellow] Verifica que el proyecto/grupo existe y tienes acceso")
+        else:
+            console.print(f"[red]✗[/red] Error al acceder a GitLab: {str(e)}")
     except Exception as e:
-        console.print(f"[red]✗[/red] Error: {str(e)}")
-        raise
+        error_msg = str(e)
+        console.print(f"[red]✗[/red] Error: {error_msg}")
+        if '--debug' in click.get_current_context().args:
+            raise
 
 
 @main.command()
@@ -672,6 +723,14 @@ def status(project_path):
             console.print(f"[yellow]⚠[/yellow] No se pudo acceder a las variables: {str(e)}")
             console.print("[dim]El token actual no tiene permisos para leer variables CI/CD[/dim]")
             
+    except gitlab.exceptions.GitlabAuthenticationError:
+        console.print("[red]✗[/red] Error de autenticación: Token de GitLab inválido o expirado")
+        console.print("[yellow]💡[/yellow] Ejecuta [cyan]gitlab-cicd init[/cyan] para reconfigurar")
+    except gitlab.exceptions.GitlabGetError as e:
+        if "404" in str(e):
+            console.print(f"[red]✗[/red] Proyecto '{project_path}' no encontrado")
+        else:
+            console.print(f"[red]✗[/red] Error al acceder a GitLab: {str(e)}")
     except Exception as e:
         console.print(f"[red]✗[/red] Error: {str(e)}")
 
@@ -709,6 +768,14 @@ def set_variable(project_path, key, value, protected, masked):
         
         console.print(f"[green]✓[/green] Variable {key} configurada exitosamente")
         
+    except gitlab.exceptions.GitlabAuthenticationError:
+        console.print("[red]✗[/red] Error de autenticación: Token de GitLab inválido o expirado")
+        console.print("[yellow]💡[/yellow] Ejecuta [cyan]gitlab-cicd init[/cyan] para reconfigurar")
+    except gitlab.exceptions.GitlabGetError as e:
+        if "404" in str(e):
+            console.print(f"[red]✗[/red] Proyecto '{project_path}' no encontrado")
+        else:
+            console.print(f"[red]✗[/red] Error al acceder a GitLab: {str(e)}")
     except Exception as e:
         console.print(f"[red]✗[/red] Error: {str(e)}")
 
@@ -745,6 +812,15 @@ def list_templates():
         for template_path in sorted(templates.keys()):
             console.print(f"  • {template_path}")
             
+    except gitlab.exceptions.GitlabAuthenticationError:
+        console.print("[red]✗[/red] Error de autenticación: Token de GitLab inválido o expirado")
+        console.print("[yellow]💡[/yellow] Ejecuta [cyan]gitlab-cicd init[/cyan] para reconfigurar")
+    except gitlab.exceptions.GitlabGetError as e:
+        if "404" in str(e):
+            console.print(f"[red]✗[/red] Repositorio de plantillas '{config.get('template_repo')}' no encontrado")
+            console.print("[yellow]💡[/yellow] Verifica la configuración con [cyan]gitlab-cicd init[/cyan]")
+        else:
+            console.print(f"[red]✗[/red] Error al acceder a GitLab: {str(e)}")
     except Exception as e:
         console.print(f"[red]✗[/red] Error: {str(e)}")
 
