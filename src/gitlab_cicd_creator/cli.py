@@ -20,64 +20,43 @@ console = Console()
 def get_available_runners(client: GitLabClient, project_path: str = None) -> list:
     """
     Obtiene todos los runners disponibles en GitLab con sus tags
-    
-    Args:
-        client: Cliente de GitLab
-        project_path: Ruta del proyecto (para obtener runners de su grupo)
-        
-    Returns:
-        Lista de diccionarios con información de runners (id, description, tags, etc.)
     """
     all_runners = []
     seen_ids = set()
     
-    # Intentar obtener runners de la instancia (requiere permisos de admin)
+    # Buscar en instancia, grupo y proyecto sin mensajes verbosos
     try:
-        console.print("[dim]  • Buscando runners de la instancia (shared runners)...[/dim]")
         instance_runners = client.get_available_runners(scope='active')
         if instance_runners:
             for runner in instance_runners:
                 if runner['id'] not in seen_ids and runner.get('tags'):
                     all_runners.append(runner)
                     seen_ids.add(runner['id'])
-            console.print(f"[green]    ✓ Encontrados {len(instance_runners)} runners de instancia[/green]")
-    except Exception as e:
-        error_msg = str(e).lower()
-        if '403' in error_msg or 'forbidden' in error_msg or 'admin' in error_msg:
-            console.print(f"[yellow]    ⚠ Sin permisos de administrador para ver runners de instancia[/yellow]")
-        else:
-            console.print(f"[dim]    → Error accediendo a runners de instancia: {str(e)[:80]}[/dim]")
+    except:
+        pass
     
-    # Revisar grupo raíz del proyecto
     if project_path:
         parts = project_path.split('/')[:-1]
         if parts:
-            root_group = parts[0]
             try:
-                console.print(f"[dim]  • Buscando runners en grupo: {root_group}...[/dim]")
-                group_runners = client.get_group_runners(root_group)
+                group_runners = client.get_group_runners(parts[0])
                 if group_runners:
                     for runner in group_runners:
                         if runner['id'] not in seen_ids and runner.get('tags'):
                             all_runners.append(runner)
                             seen_ids.add(runner['id'])
-                    console.print(f"[green]    ✓ Encontrados {len(group_runners)} runners en {root_group}[/green]")
-            except Exception as e:
-                console.print(f"[dim]    → Sin runners en {root_group}[/dim]")
-    
-    # Buscar runners en el proyecto destino
-    if project_path:
+            except:
+                pass
+        
         try:
-            console.print(f"[dim]  • Buscando runners en proyecto: {project_path}...[/dim]")
             project_runners = client.get_project_runners(project_path)
             if project_runners:
                 for runner in project_runners:
                     if runner['id'] not in seen_ids and runner.get('tags'):
                         all_runners.append(runner)
                         seen_ids.add(runner['id'])
-                console.print(f"[green]    ✓ Encontrados {len(project_runners)} runners en proyecto[/green]")
-        except Exception as e:
-            console.print(f"[dim]    → Sin runners en proyecto[/dim]")
+        except:
+            pass
     
     return all_runners
 
@@ -85,37 +64,27 @@ def get_available_runners(client: GitLabClient, project_path: str = None) -> lis
 def select_runner_interactive(available_runners: list, default_tags: list = None) -> list:
     """
     Permite seleccionar un runner y retorna sus tags
-    
-    Args:
-        available_runners: Lista de runners disponibles
-        default_tags: Tags por defecto sugeridos
-        
-    Returns:
-        Lista de tags del runner seleccionado
     """
     if not available_runners:
-        # Si no hay runners disponibles, solicitar tags manualmente
+        console.print("\n[yellow]⚠[/yellow] No se encontraron runners, ingresa los tags manualmente")
         tags_input = Prompt.ask(
-            "Tags de GitLab Runners (separados por coma)",
+            "Tags del runner (separados por coma)",
             default=','.join(default_tags) if default_tags else "docker"
         )
         return [tag.strip() for tag in tags_input.split(',') if tag.strip()]
     
-    # Mostrar runners disponibles
-    console.print("\n[bold]Runners disponibles:[/bold]")
+    # Mostrar runners de forma compacta
+    console.print("")
     for idx, runner in enumerate(available_runners, 1):
         tags_str = ', '.join(runner.get('tags', []))
-        status = "[green]●[/green]" if runner.get('online') else "[red]●[/red]"
-        desc = runner.get('description', 'N/A')[:50]
-        console.print(f"  {idx}. {status} [cyan]#{runner['id']}[/cyan] {desc}")
-        console.print(f"     [dim]Tags: {tags_str}[/dim]")
-    
-    console.print("\n[dim]Selecciona el número del runner cuyos tags deseas usar[/dim]")
+        status = "●" if runner.get('online') else "○"
+        desc = runner.get('description', f"Runner #{runner['id']}")[:40]
+        console.print(f"  {idx}. {status} {desc}")
+        console.print(f"     [dim]{tags_str}[/dim]")
     
     # Determinar default
     default_idx = "1"
     if default_tags:
-        # Intentar encontrar un runner que tenga los tags por defecto
         for idx, runner in enumerate(available_runners, 1):
             runner_tags = set(runner.get('tags', []))
             if default_tags and set(default_tags).issubset(runner_tags):
@@ -123,25 +92,22 @@ def select_runner_interactive(available_runners: list, default_tags: list = None
                 break
     
     selection = Prompt.ask(
-        "Selecciona el runner",
+        "\nRunner a usar",
         default=default_idx
     )
     
-    # Parsear selección
     try:
         idx = int(selection) - 1
         if 0 <= idx < len(available_runners):
             selected_runner = available_runners[idx]
             tags = selected_runner.get('tags', [])
-            console.print(f"[green]✓[/green] Runner seleccionado: {selected_runner.get('description', 'N/A')}")
-            console.print(f"[green]✓[/green] Tags: {', '.join(tags)}")
             return tags
     except ValueError:
         pass
     
-    # Si falla, pedir manual
+    # Fallback manual
     tags_input = Prompt.ask(
-        "Tags de GitLab Runners (separados por coma)",
+        "Tags del runner (separados por coma)",
         default=','.join(default_tags) if default_tags else "docker"
     )
     return [tag.strip() for tag in tags_input.split(',') if tag.strip()]
@@ -283,32 +249,24 @@ def create(project_path, namespace, environments, create_project):
     
     PROJECT_PATH: Ruta del proyecto en GitLab (ej: grupo/proyecto)
     """
-    console.print(Panel.fit(
-        f"[bold blue]Creando CI/CD para {project_path}[/bold blue]",
-        border_style="blue"
-    ))
+    console.print(f"\n[bold blue]→[/bold blue] Configurando CI/CD: [bold]{project_path}[/bold]\n")
     
     # Cargar configuración
     config = Config()
     if not config.is_configured():
-        console.print("[red]✗[/red] No se ha inicializado la configuración. Ejecuta 'gitlab-cicd init' primero.")
+        console.print("[red]✗[/red] Ejecuta primero: [cyan]gitlab-cicd init[/cyan]")
         return
     
     try:
         # Conectar a GitLab
         try:
             client = GitLabClient(config.get('gitlab_url'), config.get('gitlab_token'))
-            console.print("[green]✓[/green] Conectado a GitLab")
+            console.print("[dim]Conectado a GitLab[/dim]")
         except Exception as auth_error:
             error_msg = str(auth_error).lower()
             if '401' in error_msg or 'invalid_token' in error_msg or 'unauthorized' in error_msg:
-                console.print("[red]✗[/red] Error de autenticación: Token de GitLab inválido o expirado")
-                console.print("\n[yellow]💡 Solución:[/yellow]")
-                console.print("  1. Genera un nuevo token en GitLab:")
-                console.print(f"     [cyan]{config.get('gitlab_url')}/-/user_settings/personal_access_tokens[/cyan]")
-                console.print("  2. Permisos requeridos: [bold]api[/bold], [bold]read_repository[/bold], [bold]write_repository[/bold]")
-                console.print("  3. Reinicializa la configuración:")
-                console.print("     [cyan]gitlab-cicd init[/cyan]")
+                console.print("[red]✗[/red] Token inválido o expirado")
+                console.print("[dim]Ejecuta:[/dim] [cyan]gitlab-cicd init[/cyan]")
                 return
             else:
                 raise
@@ -317,40 +275,29 @@ def create(project_path, namespace, environments, create_project):
         if create_project:
             try:
                 project = client.create_project_if_not_exists(project_path)
-                console.print(f"[green]✓[/green] Proyecto listo: {project['web_url']}")
+                console.print(f"[green]✓[/green] Proyecto: {project['name']}")
             except ValueError as e:
-                console.print(f"[red]✗[/red] {str(e)}")
-                console.print("[yellow]💡[/yellow] El grupo/namespace debe existir antes de crear el proyecto")
-                console.print(f"[dim]  1. Crea el grupo en GitLab: {config.get('gitlab_url')}/admin/groups/new[/dim]")
-                console.print(f"[dim]  2. O usa un grupo existente que tengas disponible[/dim]")
+                console.print(f"[red]✗[/red] El grupo debe existir primero")
                 return
         else:
             try:
                 project = client.get_project(project_path)
-                console.print(f"[green]✓[/green] Proyecto encontrado: {project['name']}")
+                console.print(f"[green]✓[/green] Proyecto: {project['name']}")
             except Exception as e:
                 if "404" in str(e):
-                    console.print(f"[red]✗[/red] El proyecto '{project_path}' no existe")
-                    console.print("[yellow]💡[/yellow] Usa --create-project para crearlo automáticamente:")
-                    console.print(f"[dim]  gitlab-cicd create {project_path} --namespace {namespace} --create-project[/dim]")
+                    console.print(f"[red]✗[/red] Proyecto no existe. Usa: [cyan]--create-project[/cyan]")
                 else:
-                    console.print(f"[red]✗[/red] Error al acceder al proyecto: {str(e)}")
+                    console.print(f"[red]✗[/red] {str(e)}")
                 return
         
-        # Obtener clusters disponibles (GitLab Agents)
-        console.print("\n[bold]Obteniendo clusters disponibles (GitLab Agents)...[/bold]")
+        # Obtener clusters disponibles (GitLab Agents) - silenciosamente
         available_clusters = []
         groups_checked = set()
         
-        # Función helper para buscar agents en un grupo
         def get_agents_from_group(group_path):
             try:
-                console.print(f"[dim]  • Buscando agents en grupo: {group_path}...[/dim]")
                 encoded_path = quote(group_path, safe='')
                 group = client.gl.groups.get(encoded_path)
-                
-                # Buscar en todos los proyectos del grupo que puedan tener agents
-                # Los agents están en proyectos específicos pero se comparten a nivel de grupo
                 try:
                     projects = group.projects.list(get_all=True)
                     for proj in projects:
@@ -359,45 +306,37 @@ def create(project_path, namespace, environments, create_project):
                             agents = full_proj.cluster_agents.list(get_all=True)
                             if agents:
                                 for agent in agents:
-                                    # Formato: proyecto:agente
                                     cluster_context = f"{proj.path_with_namespace}:{agent.name}"
                                     if cluster_context not in available_clusters:
                                         available_clusters.append(cluster_context)
-                                        console.print(f"  [green]✓[/green] {cluster_context}")
                         except:
                             pass
-                except Exception as e:
-                    console.print(f"[dim]    → Error listando proyectos: {str(e)[:60]}[/dim]")
-                    
-            except Exception as e:
-                console.print(f"[dim]    → No se pudo acceder al grupo: {str(e)[:60]}[/dim]")
+                except:
+                    pass
+            except:
+                pass
         
-        # 1. Buscar en el grupo del proyecto de plantillas
+        # Buscar en grupos relevantes
         if config.get('template_repo'):
             template_parts = config.get('template_repo').split('/')
-            # Revisar todos los niveles del grupo (ej: clients, clients/internal-infrastructure)
             for i in range(1, len(template_parts)):
                 group_path = '/'.join(template_parts[:i])
                 if group_path not in groups_checked:
                     groups_checked.add(group_path)
                     get_agents_from_group(group_path)
         
-        # 2. Buscar en el grupo del proyecto actual
-        project_parts = project_path.split('/')[:-1]  # Excluir nombre del proyecto
+        project_parts = project_path.split('/')[:-1]
         for i in range(1, len(project_parts) + 1):
             group_path = '/'.join(project_parts[:i])
             if group_path not in groups_checked:
                 groups_checked.add(group_path)
                 get_agents_from_group(group_path)
         
-        if not available_clusters:
-            console.print("\n[yellow]⚠[/yellow] No se encontraron GitLab Agents configurados")
-            console.print("[dim]  → Se solicitará el KUBE_CONTEXT manualmente[/dim]")
-        else:
-            console.print(f"\n[green]✓[/green] {len(available_clusters)} agent(s) disponible(s)")
+        if available_clusters:
+            console.print(f"[green]✓[/green] {len(available_clusters)} cluster(s) disponible(s)")
         
-        # Cargar plantillas desde el repositorio central
-        console.print(f"\nCargando plantillas desde: {config.get('template_repo')}")
+        # Cargar plantillas
+        console.print(f"[green]✓[/green] Plantillas: {config.get('template_repo')}")
         template_manager = TemplateManager(config.get('template_repo'))
         templates = template_manager.load_from_gitlab(
             config.get('gitlab_url'),
@@ -406,119 +345,88 @@ def create(project_path, namespace, environments, create_project):
         )
         
         if not templates:
-            console.print("[red]✗[/red] No se pudieron cargar las plantillas del repositorio")
+            console.print("[red]✗[/red] No se encontraron plantillas")
             return
-            
-        console.print(f"[green]✓[/green] Plantillas cargadas: {len(templates)} archivos")
         
-        # Extraer y clasificar variables
-        console.print("\n[bold]Analizando variables de las plantillas...[/bold]")
+        # Analizar variables silenciosamente
         template_vars, cicd_vars = template_manager.extract_variables(templates)
-        
-        # Analizar variables requeridas por archivos incluidos remotamente
-        console.print("[dim]  • Analizando archivos remotos incluidos...[/dim]")
         include_vars = template_manager.extract_variables_from_includes(
             templates,
             config.get('gitlab_url'),
             config.get('gitlab_token')
         )
         
-        if include_vars:
-            console.print(f"[dim]  • Variables en includes remotos: {', '.join(include_vars)}[/dim]")
-        
-        if template_vars:
-            console.print(f"  • Variables de plantilla: {', '.join(template_vars)}")
-        if cicd_vars:
-            console.print(f"  • Variables CI/CD (se guardarán en GitLab): {', '.join(cicd_vars)}")
-        
         # Obtener runners disponibles
-        console.print("\n[bold]Obteniendo runners disponibles...[/bold]")
         available_runners = get_available_runners(client, project_path)
-        
         if available_runners:
-            console.print(f"\n[green]✓[/green] Encontrados {len(available_runners)} runners con tags configurados")
-        else:
-            console.print("\n[yellow]⚠[/yellow] No se encontraron runners con tags configurados")
-            console.print("[dim]Los runners en GitLab deben tener tags asignados (ej: docker, kubernetes)[/dim]")
-            console.print("[yellow]  → Se solicitarán los tags manualmente[/yellow]")
+            console.print(f"[green]✓[/green] {len(available_runners)} runner(s) disponible(s)")
         
-        # Solicitar configuración de arquitectura del proyecto
-        console.print("\n[bold cyan]Configuración del Pipeline[/bold cyan]")
+        # Configuración del pipeline
+        console.print("\n[bold]Configuración:[/bold]")
         
-        # Componentes a desplegar
+        # Componentes
         project_name = project_path.split('/')[-1]
         components_input = Prompt.ask(
-            "Componentes a desplegar (separados por coma)",
+            "Componentes (separados por coma)",
             default="web"
         )
         components = [c.strip() for c in components_input.split(',') if c.strip()]
         
-        # Preguntar si se va a usar Docker
-        use_docker = Confirm.ask(
-            "\n¿El proyecto utiliza Docker para construir las imágenes?",
-            default=True
-        )
+        # Docker
+        use_docker = Confirm.ask("¿Usa Docker?", default=True)
         
-        # Si usa Docker, recopilar información de Dockerfile por componente
         dockerfile_paths = {}
         if use_docker:
-            console.print("\n[bold]Configuración de Dockerfile por componente:[/bold]")
             for component in components:
-                console.print(f"\n[cyan]Componente: {component}[/cyan]")
+                default_path = "Dockerfile" if len(components) == 1 else f"{component}/Dockerfile"
                 dockerfile_path = Prompt.ask(
-                    f"Ruta del Dockerfile para '{component}'",
-                    default=f"Dockerfile" if len(components) == 1 else f"{component}/Dockerfile"
+                    f"Dockerfile de '{component}'",
+                    default=default_path
                 )
                 dockerfile_paths[component] = dockerfile_path
-                console.print(f"  [green]✓[/green] {component}: {dockerfile_path}")
         
-        # Selección de runner
+        # Runner
+        console.print("\n[bold]Selecciona el runner:[/bold]")
         default_runner_tags = ['buildkit', 'scaleway', 'worko-internal']
         runner_tags = select_runner_interactive(available_runners, default_runner_tags)
-        console.print(f"[green]✓[/green] Tags que se usarán: {', '.join(runner_tags)}")
         
-        # Prefijo para tags de release
+        # Prefijo
         suggested_prefix = project_name.split('-')[0] if '-' in project_name else project_name[:4]
         tag_prefix = Prompt.ask(
-            "Prefijo para tags de release (ej: wkhs, acme)",
+            "Prefijo para tags de release",
             default=suggested_prefix
         )
         
-        # Configurar KUBE_CONTEXT por entorno
+        # Configurar clusters por entorno
         env_list = [e.strip() for e in environments.split(',')]
         kube_contexts = {}
         
-        console.print("\n[bold]Configuración de KUBE_CONTEXT por entorno:[/bold]")
+        console.print("\n[bold]Clusters por entorno:[/bold]")
+        if available_clusters:
+            for idx, cluster in enumerate(available_clusters, 1):
+                console.print(f"  {idx}. {cluster}")
+        
         for env in env_list:
-            console.print(f"\n[cyan]Entorno: {env}[/cyan]")
-            
             if available_clusters:
-                console.print("Clusters disponibles:")
-                for idx, cluster in enumerate(available_clusters, 1):
-                    console.print(f"  {idx}. {cluster}")
-                
                 cluster_choice = Prompt.ask(
-                    f"Selecciona el cluster para {env} (número o ingresa manualmente)",
+                    f"Cluster para [cyan]{env}[/cyan]",
                     default="1"
                 )
-                
                 try:
                     cluster_idx = int(cluster_choice) - 1
                     if 0 <= cluster_idx < len(available_clusters):
                         kube_contexts[env] = available_clusters[cluster_idx]
                     else:
-                        kube_contexts[env] = Prompt.ask(f"KUBE_CONTEXT para {env}")
+                        kube_contexts[env] = cluster_choice
                 except ValueError:
                     kube_contexts[env] = cluster_choice
             else:
                 kube_contexts[env] = Prompt.ask(
-                    f"KUBE_CONTEXT para {env}",
+                    f"KUBE_CONTEXT [cyan]{env}[/cyan]",
                     default=f"{config.get('template_repo')}:cluster-{env}"
                 )
         
-        # Recopilar información adicional para variables de plantilla
-        console.print("\n[bold]Información requerida para las plantillas:[/bold]")
-        
+        # Variables del template
         variables = {
             'project_name': project['name'],
             'project_path': project_path,
@@ -532,57 +440,31 @@ def create(project_path, namespace, environments, create_project):
             'dockerfile_paths': dockerfile_paths,
         }
         
-        # Verificar qué variables de includes ya están cubiertas
-        if include_vars:
-            # Variables que ya se definen automáticamente en el template
-            auto_defined_in_template = {
-                'PACKAGE_NAME',  # Se define como {{ component }} en cada job
-                'DOCKERFILE_PATH',  # Se define en cada job build
-            }
-            
-            # Variables que se configuran automáticamente desde otras variables
-            auto_configured = {}
-            
-            # Filtrar variables que necesitan intervención del usuario
-            missing_include_vars = [
-                v for v in include_vars 
-                if v not in auto_defined_in_template 
-                and v not in variables 
-                and v not in auto_configured
-            ]
-            
-            if missing_include_vars:
-                console.print(f"\n[yellow]⚠[/yellow] Variables requeridas por archivos remotos incluidos:")
-                console.print(f"[dim]  {', '.join(missing_include_vars)}[/dim]")
-                console.print("[dim]  Estas variables se configurarán automáticamente o se solicitarán a continuación.[/dim]")
+        # Variables adicionales de plantilla
+        if template_vars:
+            console.print("\n[bold]Variables de plantilla:[/bold]")
+            for var in template_vars:
+                if var not in variables:
+                    default_value = ""
+                    if var == 'docker_registry':
+                        default_value = "registry.gitlab.com"
+                    elif var == 'docker_image':
+                        default_value = project_path
+                        
+                    value = Prompt.ask(
+                        f"{var}",
+                        default=default_value if default_value else None
+                    )
+                    variables[var] = value
         
-        # Solicitar valores para variables de plantilla adicionales
-        for var in template_vars:
-            if var not in variables:
-                default_value = ""
-                if var == 'docker_registry':
-                    default_value = "registry.gitlab.com"
-                elif var == 'docker_image':
-                    default_value = project_path
-                    
-                value = Prompt.ask(
-                    f"{var}",
-                    default=default_value if default_value else None
-                )
-                variables[var] = value
-        
-        # Solicitar valores para variables CI/CD
+        # Variables CI/CD
         cicd_variables = {}
         if cicd_vars:
-            console.print("\n[bold]Valores para variables CI/CD:[/bold]")
-            console.print("[dim]Estas variables se guardarán en la configuración de GitLab[/dim]")
-            
+            console.print("\n[bold]Variables CI/CD:[/bold]")
             for var in cicd_vars:
-                # Preguntar si la variable debe ser protegida/enmascarada
                 value = Prompt.ask(f"{var}")
-                
-                is_protected = Confirm.ask(f"  ¿Marcar {var} como protegida?", default=False)
-                is_masked = Confirm.ask(f"  ¿Marcar {var} como enmascarada?", default=True)
+                is_protected = Confirm.ask(f"  Protegida?", default=False)
+                is_masked = Confirm.ask(f"  Enmascarada?", default=True)
                 
                 cicd_variables[var] = {
                     'value': value,
@@ -590,14 +472,11 @@ def create(project_path, namespace, environments, create_project):
                     'masked': is_masked
                 }
         
-        # Generar configuración K8s
+        # Generar archivos
+        console.print("\n[dim]Generando archivos...[/dim]")
         generator = K8sGenerator()
         generator.set_cicd_vars(cicd_vars)
-        
-        # Procesar plantillas (sin sustituir variables CI/CD)
-        console.print("\n[bold]Generando archivos CI/CD...[/bold]")
         processed_files = generator.process_templates(templates, variables, preserve_cicd_vars=True)
-        console.print(f"[green]✓[/green] {len(processed_files)} archivos procesados")
         
         # Crear archivos en el repositorio
         for file_path, content in processed_files.items():
@@ -605,12 +484,12 @@ def create(project_path, namespace, environments, create_project):
                 project['id'],
                 file_path,
                 content,
-                f"Add CI/CD configuration: {file_path}"
+                f"Add CI/CD: {file_path}"
             )
-            console.print(f"  [green]✓[/green] {file_path}")
+        console.print(f"[green]✓[/green] {len(processed_files)} archivo(s) creado(s)")
         
-        # Crear variables KUBE_CONTEXT por entorno
-        console.print("\n[bold]Configurando variables KUBE_CONTEXT en GitLab...[/bold]")
+        # Configurar variables
+        console.print("[dim]Configurando variables...[/dim]")
         for env, kube_context in kube_contexts.items():
             client.create_or_update_variable(
                 project['id'],
@@ -620,12 +499,8 @@ def create(project_path, namespace, environments, create_project):
                 masked=False,
                 environment_scope=env
             )
-            console.print(f"  [green]✓[/green] KUBE_CONTEXT={kube_context} (scope: {env})")
         
-        # Crear variables CI/CD extraídas de las plantillas
         if cicd_variables:
-            console.print("\n[bold]Configurando variables CI/CD adicionales en GitLab...[/bold]")
-            
             for key, var_config in cicd_variables.items():
                 client.create_or_update_variable(
                     project['id'],
@@ -634,18 +509,10 @@ def create(project_path, namespace, environments, create_project):
                     protected=var_config['protected'],
                     masked=var_config['masked']
                 )
-                flags = []
-                if var_config['protected']:
-                    flags.append('protegida')
-                if var_config['masked']:
-                    flags.append('enmascarada')
-                flag_str = f" ({', '.join(flags)})" if flags else ""
-                console.print(f"  [green]✓[/green] {key}{flag_str}")
-        else:
-            console.print("\n[dim]No se definieron variables CI/CD adicionales[/dim]")
+        console.print(f"[green]✓[/green] Variables configuradas")
         
-        console.print(f"\n[bold green]✓ CI/CD configurado exitosamente![/bold green]")
-        console.print(f"\nPuedes ver el pipeline en: {project['web_url']}/-/pipelines")
+        console.print(f"\n[bold green]✓ CI/CD configurado![/bold green]")
+        console.print(f"[dim]Ver pipeline:[/dim] {project['web_url']}/-/pipelines")
         
     except gitlab.exceptions.GitlabAuthenticationError as e:
         console.print("[red]✗[/red] Error de autenticación: Token de GitLab inválido o expirado")
