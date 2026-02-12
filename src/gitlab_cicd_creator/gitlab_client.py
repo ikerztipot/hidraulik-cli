@@ -239,7 +239,8 @@ class GitLabClient:
         value: str,
         protected: bool = False,
         masked: bool = False,
-        environment_scope: str = '*'
+        environment_scope: str = '*',
+        raw: bool = False
     ) -> None:
         """
         Crea o actualiza una variable CI/CD
@@ -251,6 +252,7 @@ class GitLabClient:
             protected: Si es una variable protegida
             masked: Si el valor debe enmascararse en los logs
             environment_scope: Alcance del ambiente
+            raw: Si True, no expande referencias de variables (default: False = expandir)
         """
         project = self._get_project_safe(project_id)
         
@@ -277,6 +279,7 @@ class GitLabClient:
                 existing_var.value = value
                 existing_var.protected = protected
                 existing_var.masked = masked
+                existing_var.raw = raw
                 existing_var.save()
             else:
                 # Crear nueva variable
@@ -286,6 +289,7 @@ class GitLabClient:
                     'protected': protected,
                     'masked': masked,
                     'environment_scope': environment_scope,
+                    'raw': raw,
                 })
         except gitlab.exceptions.GitlabCreateError as e:
             # Si hay error al crear (ej: ya existe), intentar actualizarla

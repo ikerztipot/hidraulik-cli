@@ -46,7 +46,7 @@ class TemplateManager:
         console.print("[yellow]⚠[/yellow] Advertencia: load_templates() está deprecado. Usa load_from_gitlab()")
         return {}
     
-    def load_from_gitlab(self, gitlab_url: str, token: str, project_path: str, ref: str = 'main') -> Dict[str, str]:
+    def load_from_gitlab(self, gitlab_url: str, token: str, project_path: str, ref: str = 'main', k8s_manifests_filter: Dict[str, List[str]] = None) -> Dict[str, str]:
         """
         Carga plantillas desde un repositorio de GitLab
         
@@ -55,6 +55,7 @@ class TemplateManager:
             token: Token de acceso
             project_path: Ruta del proyecto con plantillas (ej: grupo/plantillas-cicd)
             ref: Rama o tag del repositorio (por defecto: main)
+            k8s_manifests_filter: Dict con componentes y manifiestos a cargar {component: ['secrets', 'configs', ...]}
             
         Returns:
             Diccionario con plantillas (ruta_archivo: contenido)
@@ -79,6 +80,7 @@ class TemplateManager:
                 if item['type'] == 'blob' 
                 and item['name'].endswith('.j2')
                 and not item['path'].startswith('includes/')
+                and self._should_include_file(item['path'], k8s_manifests_filter)
             ]
             
             console.print(f"  • Encontrados {len(template_files)} archivos de plantilla")
@@ -146,6 +148,49 @@ class TemplateManager:
             Contenido de la plantilla o cadena vacía si no existe
         """
         return self.templates_cache.get(template_name, '')
+    
+    def _should_include_file(self, file_path: str, k8s_manifests_filter: Dict[str, List[str]] = None) -> bool:
+        """
+        Determina si un archivo debe incluirse según el filtro de manifiestos K8s
+        
+        Args:
+            file_path: Ruta del archivo (ej: k8s/02-secrets.yaml.j2)
+            k8s_manifests_filter: Filtro de manifiestos por componente
+            
+        Returns:
+            True si el archivo debe incluirse, False si no
+        """
+        # Si no hay filtro, incluir todos los archivos
+        if not k8s_manifests_filter:
+            return True
+        
+        # Si no es un archivo de k8s, incluirlo siempre
+        if not file_path.startswith('k8s/'):
+            return True
+        
+        # Mapeo de nombres de archivo a tipos de manifiesto
+        manifest_mapping = {
+            '01-namespace': 'namespace',
+            '02-secrets': 'secrets',
+            '03-configs': 'configs',
+            '04-deployment': 'deployment',
+            '05-ingress': 'ingress',
+            '06-service': 'service',
+            '07-pvc': 'pvc',
+        }
+        
+        # Obtener todos los manifiestos que deben incluirse
+        all_required_manifests = set()
+        for component, manifests in k8s_manifests_filter.items():
+            all_required_manifests.update(manifests)
+        
+        # Verificar si el archivo corresponde a algún manifiesto requerido
+        for file_pattern, manifest_type in manifest_mapping.items():
+            if file_pattern in file_path and manifest_type in all_required_manifests:
+                return True
+        
+        # Si es un archivo k8s pero no coincide con ningún patrón requerido, excluirlo
+        return False
     
     def _detect_template_type(self, file_path: str) -> str:
         """
@@ -239,7 +284,10 @@ class TemplateManager:
                 all_vars.update(matches)
         
         # Variables de loop internas de Jinja2 que no deben pedirse al usuario
-        jinja_loop_vars = {'env', 'component', 'tag', 'idx', 'item', 'key', 'value', 'index', 'loop'}
+        jinja_loop_vars = {
+            'env', 'component', 'tag', 'idx', 'item', 'key', 'value', 'index', 'loop',
+            'secret_name', 'var_name', 'volume', 'manifests', 'profile'
+        }
         
         # Clasificar variables
         template_vars = []

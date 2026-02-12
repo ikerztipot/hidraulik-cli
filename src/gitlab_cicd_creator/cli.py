@@ -335,33 +335,12 @@ def create(project_path, namespace, environments, create_project):
         if available_clusters:
             console.print(f"[green]✓[/green] {len(available_clusters)} cluster(s) disponible(s)")
         
-        # Cargar plantillas
-        console.print(f"[green]✓[/green] Plantillas: {config.get('template_repo')}")
-        template_manager = TemplateManager(config.get('template_repo'))
-        templates = template_manager.load_from_gitlab(
-            config.get('gitlab_url'),
-            config.get('gitlab_token'),
-            config.get('template_repo')
-        )
-        
-        if not templates:
-            console.print("[red]✗[/red] No se encontraron plantillas")
-            return
-        
-        # Analizar variables silenciosamente
-        template_vars, cicd_vars = template_manager.extract_variables(templates)
-        include_vars = template_manager.extract_variables_from_includes(
-            templates,
-            config.get('gitlab_url'),
-            config.get('gitlab_token')
-        )
-        
         # Obtener runners disponibles
         available_runners = get_available_runners(client, project_path)
         if available_runners:
             console.print(f"[green]✓[/green] {len(available_runners)} runner(s) disponible(s)")
         
-        # Configuración del pipeline
+        # Configuración del pipeline - PRIMERO para poder filtrar templates
         console.print("\n[bold]Configuración:[/bold]")
         
         # Componentes
@@ -376,6 +355,7 @@ def create(project_path, namespace, environments, create_project):
         use_docker = Confirm.ask("¿Usa Docker?", default=True)
         
         dockerfile_paths = {}
+        container_ports = {}
         if use_docker:
             for component in components:
                 default_path = "Dockerfile" if len(components) == 1 else f"{component}/Dockerfile"
@@ -384,6 +364,186 @@ def create(project_path, namespace, environments, create_project):
                     default=default_path
                 )
                 dockerfile_paths[component] = dockerfile_path
+                
+                port = Prompt.ask(
+                    f"Puerto expuesto por '{component}'",
+                    default="80"
+                )
+                container_ports[component] = port
+                console.print(f"  [green]✓[/green] {component}: {dockerfile_path} (puerto {port})")
+        
+        # Variables configuration (ANTES de K8s manifests)
+        console.print("\n[bold]Variables de entorno:[/bold]")
+        config_vars = {}
+        secret_vars = {}
+        
+        for component in components:
+            console.print(f"\n[bold cyan]{component}[/bold cyan]")
+            console.print("[dim]Introduce las variables de entorno (una por una, vacío para terminar)[/dim]")
+            
+            comp_config_vars = []
+            comp_secret_vars = []
+            
+            while True:
+                var_name = Prompt.ask(
+                    f"Nombre de variable",
+                    default=""
+                )
+                
+                if not var_name.strip():
+                    break
+                
+                is_secret = Confirm.ask(
+                    f"¿'{var_name}' es un secret?",
+                    default=False
+                )
+                
+                if is_secret:
+                    comp_secret_vars.append(var_name)
+                    console.print(f"  [red]🔒[/red] {var_name} → Secret")
+                else:
+                    comp_config_vars.append(var_name)
+                    console.print(f"  [green]✓[/green] {var_name} → ConfigMap")
+            
+            if comp_config_vars:
+                config_vars[component] = comp_config_vars
+            if comp_secret_vars:
+                secret_vars[component] = comp_secret_vars
+            
+            total_vars = len(comp_config_vars) + len(comp_secret_vars)
+            if total_vars > 0:
+                console.print(f"[green]✓[/green] {total_vars} variable(s) configurada(s)")
+            else:
+                console.print("[dim]Sin variables[/dim]")
+        
+        # Kubernetes deployment configuration
+        console.print("\n[bold]Despliegue en Kubernetes:[/bold]")
+        k8s_deployment = {}
+        k8s_manifests = {}
+        
+        for component in components:
+            deploy_to_k8s = Confirm.ask(
+                f"¿'{component}' se despliega en Kubernetes?",
+                default=True
+            )
+            k8s_deployment[component] = deploy_to_k8s
+            
+            if deploy_to_k8s:
+                console.print(f"  Manifiestos para '{component}':")
+                manifests = []
+                
+                if Confirm.ask("    - Namespace", default=False):
+                    manifests.append('namespace')
+                
+                # Auto-activar Secrets si hay secret_vars
+                if component in secret_vars and secret_vars[component]:
+                    manifests.append('secrets')
+                    console.print(f"    - Secrets [dim](auto: {len(secret_vars[component])} secret(s))[/dim]")
+                elif Confirm.ask("    - Secrets", default=True):
+                    manifests.append('secrets')
+                
+                # Auto-activar ConfigMaps si hay config_vars
+                if component in config_vars and config_vars[component]:
+                    manifests.append('configs')
+                    console.print(f"    - ConfigMaps [dim](auto: {len(config_vars[component])} var(s))[/dim]")
+                elif Confirm.ask("    - ConfigMaps", default=True):
+                    manifests.append('configs')
+                
+                if Confirm.ask("    - Deployment", default=True):
+                    manifests.append('deployment')
+                if Confirm.ask("    - Ingress", default=True):
+                    manifests.append('ingress')
+                if Confirm.ask("    - Service", default=True):
+                    manifests.append('service')
+                if Confirm.ask("    - PVC (PersistentVolumeClaim)", default=False):
+                    manifests.append('pvc')
+                
+                k8s_manifests[component] = manifests
+                console.print(f"  [green]✓[/green] {', '.join(manifests)}")
+        
+        # Resource profiles configuration
+        console.print("\n[bold]Perfiles de recursos disponibles:[/bold]")
+        console.print("  [cyan]xsmall[/cyan]: CPU 100m-500m,  RAM 64Mi-256Mi")
+        console.print("  [cyan]small[/cyan]:  CPU 250m-500m,  RAM 256Mi-512Mi")
+        console.print("  [cyan]medium[/cyan]: CPU 500m-1000m, RAM 512Mi-1Gi")
+        console.print("  [cyan]large[/cyan]:  CPU 1000m-2000m, RAM 1Gi-2Gi")
+        console.print("  [cyan]xlarge[/cyan]: CPU 2000m-4000m, RAM 2Gi-4Gi")
+        
+        resource_profiles = {}
+        for component in components:
+            if k8s_deployment.get(component, True):  # Asumir K8s por defecto
+                profile = Prompt.ask(
+                    f"Perfil de recursos para '{component}'",
+                    choices=["xsmall", "small", "medium", "large", "xlarge"],
+                    default="medium"
+                )
+                resource_profiles[component] = profile
+                console.print(f"  [green]✓[/green] {component}: {profile}")
+        
+        # PVC (PersistentVolumeClaim) configuration
+        pvc_volumes = {}
+        for component in components:
+            if k8s_deployment.get(component) and 'pvc' in k8s_manifests.get(component, []):
+                console.print(f"\n[bold]Configuración de PVC para '{component}':[/bold]")
+                console.print("[dim]Puedes definir múltiples volúmenes[/dim]")
+                
+                volumes_list = []
+                while True:
+                    volume_name = Prompt.ask(
+                        f"Nombre del volumen (vacío para terminar)",
+                        default="uploads" if not volumes_list else ""
+                    )
+                    
+                    if not volume_name.strip():
+                        break
+                    
+                    mount_path = Prompt.ask(
+                        f"Ruta de montaje para '{volume_name}'",
+                        default="/opt/app/public/uploads"
+                    )
+                    
+                    storage = Prompt.ask(
+                        f"Tamaño de storage (ej: 5Gi, 10Gi)",
+                        default="5Gi"
+                    )
+                    
+                    volumes_list.append({
+                        'name': volume_name,
+                        'mount_path': mount_path,
+                        'storage': storage
+                    })
+                    
+                    console.print(f"  [green]✓[/green] {volume_name} → {mount_path} ({storage})")
+                
+                if volumes_list:
+                    pvc_volumes[component] = volumes_list
+                    console.print(f"  [green]✓[/green] {len(volumes_list)} volumen(es) configurado(s)")
+                else:
+                    console.print(f"  [dim]Sin volúmenes[/dim]")
+        
+        # Cargar plantillas CON FILTRO de manifiestos seleccionados
+        console.print(f"\n[dim]Cargando plantillas filtradas...[/dim]")
+        template_manager = TemplateManager(config.get('template_repo'))
+        templates = template_manager.load_from_gitlab(
+            config.get('gitlab_url'),
+            config.get('gitlab_token'),
+            config.get('template_repo'),
+            k8s_manifests_filter=k8s_manifests
+        )
+        
+        if not templates:
+            console.print("[red]✗[/red] No se encontraron plantillas")
+            return
+        
+        console.print(f"[green]✓[/green] {len(templates)} plantilla(s) cargada(s)")
+        
+        # Analizar variables silenciosamente
+        template_vars, cicd_vars = template_manager.extract_variables(templates)
+        include_vars = template_manager.extract_variables_from_includes(
+            templates,
+            config.get('gitlab_url'),
+            config.get('gitlab_token')
+        )
         
         # Runner
         console.print("\n[bold]Selecciona el runner:[/bold]")
@@ -438,6 +598,13 @@ def create(project_path, namespace, environments, create_project):
             'tag_prefix': tag_prefix,
             'use_docker': use_docker,
             'dockerfile_paths': dockerfile_paths,
+            'container_ports': container_ports,
+            'resource_profiles': resource_profiles,
+            'k8s_deployment': k8s_deployment,
+            'k8s_manifests': k8s_manifests,
+            'config_vars': config_vars,
+            'secret_vars': secret_vars,
+            'pvc_volumes': pvc_volumes,
         }
         
         # Variables adicionales de plantilla
@@ -476,7 +643,51 @@ def create(project_path, namespace, environments, create_project):
         console.print("\n[dim]Generando archivos...[/dim]")
         generator = K8sGenerator()
         generator.set_cicd_vars(cicd_vars)
-        processed_files = generator.process_templates(templates, variables, preserve_cicd_vars=True)
+        
+        # Separar templates de K8s y pipeline
+        k8s_templates = {k: v for k, v in templates.items() if k.startswith('k8s/')}
+        pipeline_templates = {k: v for k, v in templates.items() if not k.startswith('k8s/')}
+        
+        # Procesar pipeline templates (solo una vez)
+        processed_files = generator.process_templates(pipeline_templates, variables, preserve_cicd_vars=True)
+        
+        # Procesar K8s templates por componente
+        for component in components:
+            # Variables específicas del componente
+            component_vars = {
+                **variables,
+                'component': component
+            }
+            
+            # Procesar templates K8s para este componente
+            component_k8s = generator.process_templates(k8s_templates, component_vars, preserve_cicd_vars=True)
+            
+            # Reescribir rutas para incluir el componente: k8s/01-namespace.yaml -> k8s/web/01-namespace.yaml
+            for file_path, content in component_k8s.items():
+                # Solo incluir archivos si están en los manifests seleccionados
+                base_name = file_path.split('/')[-1]  # 01-namespace.yaml
+                manifest_type = None
+                
+                # Mapear archivo a tipo de manifest
+                if '01-namespace' in base_name:
+                    manifest_type = 'namespace'
+                elif '02-secrets' in base_name:
+                    manifest_type = 'secrets'
+                elif '03-configs' in base_name:
+                    manifest_type = 'configs'
+                elif '04-deployment' in base_name:
+                    manifest_type = 'deployment'
+                elif '05-ingress' in base_name:
+                    manifest_type = 'ingress'
+                elif '06-service' in base_name:
+                    manifest_type = 'service'
+                elif '07-pvc' in base_name:
+                    manifest_type = 'pvc'
+                
+                # Solo incluir si el manifest está seleccionado para este componente
+                if manifest_type and manifest_type in k8s_manifests.get(component, []):
+                    new_path = f"k8s/{component}/{base_name}"
+                    processed_files[new_path] = content
         
         # Crear archivos en el repositorio
         for file_path, content in processed_files.items():
@@ -490,6 +701,8 @@ def create(project_path, namespace, environments, create_project):
         
         # Configurar variables
         console.print("[dim]Configurando variables...[/dim]")
+        
+        # KUBE_CONTEXT por entorno
         for env, kube_context in kube_contexts.items():
             client.create_or_update_variable(
                 project['id'],
@@ -499,6 +712,32 @@ def create(project_path, namespace, environments, create_project):
                 masked=False,
                 environment_scope=env
             )
+        
+        # Variables de ConfigMap (no protegidas, no enmascaradas)
+        for component, vars_list in config_vars.items():
+            for var_name in vars_list:
+                # Usar placeholder, el usuario lo configurará después
+                client.create_or_update_variable(
+                    project['id'],
+                    var_name,
+                    'CHANGE_ME',
+                    protected=False,
+                    masked=False,
+                    environment_scope='*'
+                )
+        
+        # Variables de Secrets (protegidas, enmascaradas)
+        for component, vars_list in secret_vars.items():
+            for var_name in vars_list:
+                # Usar placeholder, el usuario lo configurará después
+                client.create_or_update_variable(
+                    project['id'],
+                    var_name,
+                    'CHANGE_ME',
+                    protected=False,
+                    masked=True,
+                    environment_scope='*'
+                )
         
         if cicd_variables:
             for key, var_config in cicd_variables.items():
@@ -510,6 +749,18 @@ def create(project_path, namespace, environments, create_project):
                     masked=var_config['masked']
                 )
         console.print(f"[green]✓[/green] Variables configuradas")
+        
+        # Informar sobre variables que necesitan valores
+        total_vars = sum(len(v) for v in config_vars.values()) + sum(len(v) for v in secret_vars.values())
+        if total_vars > 0:
+            console.print(f"\n[yellow]⚠[/yellow] {total_vars} variable(s) creada(s) sin valor:")
+            for component, vars_list in config_vars.items():
+                for var_name in vars_list:
+                    console.print(f"  • {var_name} (ConfigMap)")
+            for component, vars_list in secret_vars.items():
+                for var_name in vars_list:
+                    console.print(f"  • {var_name} (Secret)")
+            console.print(f"\n[dim]Configúralas en:[/dim] {project['web_url']}/-/settings/ci_cd")
         
         console.print(f"\n[bold green]✓ CI/CD configurado![/bold green]")
         console.print(f"[dim]Ver pipeline:[/dim] {project['web_url']}/-/pipelines")
