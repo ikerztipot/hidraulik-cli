@@ -44,7 +44,7 @@ build-{{ component }}:
   extends: .build-buildkit-scaleway
   {%- if k8s_deployment.get(component, False) %}
   environment:
-    name: {{ environments[0] }}-{{ component }}
+    name: {{ environments[0] }}
   {%- endif %}
   rules:
     - if: '$CI_COMMIT_TAG =~ /^{{ tag_prefix }}-{{ component }}-/'
@@ -116,7 +116,7 @@ hydrate-{{ component }}-{{ env }}:
   stage: deploy-{{ component }}-{{ env }}
   extends: .hydrate-{{ component }}
   environment:
-    name: {{ env }}-{{ component }}
+    name: {{ env }}
 {% endfor %}
 
 # Deploy template - Base job for {{ component }}
@@ -185,7 +185,7 @@ deploy-{{ component }}-{{ env }}:
   stage: deploy-{{ component }}-{{ env }}
   extends: .deploy-{{ component }}
   environment:
-    name: {{ env }}-{{ component }}
+    name: {{ env }}
   needs:
     - job: hydrate-{{ component }}-{{ env }}
       artifacts: true
