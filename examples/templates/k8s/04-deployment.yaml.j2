@@ -1,0 +1,101 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ component }}
+  labels:
+    app: {{ project_name }}-{{ component }}
+  namespace: {{ namespace }}
+spec:
+  replicas: 1
+  {%- if 'pvc' in k8s_manifests.get(component, []) and pvc_volumes.get(component) %}
+  strategy:
+    type: Recreate
+  {%- endif %}
+  selector:
+    matchLabels:
+      app: {{ project_name }}-{{ component }}
+  template:
+    metadata:
+      labels:
+        app: {{ project_name }}-{{ component }}
+    spec:
+      {%- if 'pvc' in k8s_manifests.get(component, []) and pvc_volumes.get(component) %}
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: "OnRootMismatch"
+      {%- endif %}
+      containers:
+        - name: {{ project_name }}-{{ component }}
+          image: ${CI_REGISTRY_IMAGE}/{{ component }}:${CI_COMMIT_REF_NAME}
+          ports:
+            - containerPort: {{ container_ports.get(component, 80) }}
+          {%- set profile = resource_profiles.get(component, 'medium') %}
+          {%- if profile == 'xsmall' %}
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: 100m
+            limits:
+              memory: "256Mi"
+              cpu: 500m
+          {%- elif profile == 'small' %}
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: 250m
+            limits:
+              memory: "512Mi"
+              cpu: 500m
+          {%- elif profile == 'medium' %}
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: 500m
+            limits:
+              memory: "1Gi"
+              cpu: 1000m
+          {%- elif profile == 'large' %}
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: 1000m
+            limits:
+              memory: "2Gi"
+              cpu: 2000m
+          {%- elif profile == 'xlarge' %}
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: 2000m
+            limits:
+              memory: "4Gi"
+              cpu: 4000m
+          {%- endif %}
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: {{ project_name }}-{{ component }}-env
+            {%- if secret_vars.get(component) %}
+            - secretRef:
+                name: {{ project_name }}-{{ component }}-secrets
+            {%- endif %}
+          {%- if 'pvc' in k8s_manifests.get(component, []) and pvc_volumes.get(component) %}
+          volumeMounts:
+            {%- for volume in pvc_volumes.get(component, []) %}
+            - name: {{ volume.name }}
+              mountPath: {{ volume.mount_path }}
+            {%- endfor %}
+          {%- endif %}
+      imagePullSecrets:
+        - name: registry-workoholics
+      {%- if 'pvc' in k8s_manifests.get(component, []) and pvc_volumes.get(component) %}
+      volumes:
+        {%- for volume in pvc_volumes.get(component, []) %}
+        - name: {{ volume.name }}
+          persistentVolumeClaim:
+            claimName: {{ project_name }}-{{ component }}-{{ volume.name }}
+        {%- endfor %}
+      {%- endif %}

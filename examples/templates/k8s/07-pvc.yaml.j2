@@ -1,0 +1,18 @@
+{%- for volume in pvc_volumes.get(component, []) %}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ project_name }}-{{ component }}-{{ volume.name }}
+  namespace: {{ namespace }}
+  labels:
+    app: {{ project_name }}
+    component: {{ project_name }}-{{ component }}-{{ volume.name }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: sbs-default
+  resources:
+    requests:
+      storage: {{ volume.storage }}
+{%- endfor %}

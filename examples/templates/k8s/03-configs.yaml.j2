@@ -1,0 +1,14 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ project_name }}-{{ component }}-env
+  namespace: {{ namespace }}
+data:
+{%- if config_vars.get(component) %}
+{%- for var_name in config_vars.get(component, []) %}
+  {{ var_name }}: {{ '${' + var_name + '}' }}
+{%- endfor %}
+{%- else %}
+  # No config variables defined
+{%- endif %}

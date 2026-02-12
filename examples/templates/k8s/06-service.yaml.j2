@@ -1,0 +1,14 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-{{ component }}
+  namespace: {{ namespace }}
+spec:
+  selector:
+    app: {{ project_name }}-{{ component }}
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: {{ container_ports.get(component, 80) }}
+  type: ClusterIP
