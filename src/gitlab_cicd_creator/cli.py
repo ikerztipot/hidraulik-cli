@@ -13,104 +13,27 @@ from .config import Config
 from .gitlab_client import GitLabClient
 from .k8s_generator import K8sGenerator
 from .template_manager import TemplateManager
+from .services import VariableService, RunnerService, K8sConfigService
+from .validators import (
+    validate_k8s_namespace,
+    validate_project_path,
+    validate_component_name,
+    sanitize_file_path
+)
+from .exceptions import (
+    GitLabCICDError,
+    AuthenticationError,
+    ProjectNotFoundError,
+    ValidationError,
+    ConfigurationError
+)
+from .logging_config import setup_logging, get_logger
 
 console = Console()
+logger = get_logger('cli')
 
-
-def get_available_runners(client: GitLabClient, project_path: str = None) -> list:
-    """
-    Obtiene todos los runners disponibles en GitLab con sus tags
-    """
-    all_runners = []
-    seen_ids = set()
-    
-    # Buscar en instancia, grupo y proyecto sin mensajes verbosos
-    try:
-        instance_runners = client.get_available_runners(scope='active')
-        if instance_runners:
-            for runner in instance_runners:
-                if runner['id'] not in seen_ids and runner.get('tags'):
-                    all_runners.append(runner)
-                    seen_ids.add(runner['id'])
-    except:
-        pass
-    
-    if project_path:
-        parts = project_path.split('/')[:-1]
-        if parts:
-            try:
-                group_runners = client.get_group_runners(parts[0])
-                if group_runners:
-                    for runner in group_runners:
-                        if runner['id'] not in seen_ids and runner.get('tags'):
-                            all_runners.append(runner)
-                            seen_ids.add(runner['id'])
-            except:
-                pass
-        
-        try:
-            project_runners = client.get_project_runners(project_path)
-            if project_runners:
-                for runner in project_runners:
-                    if runner['id'] not in seen_ids and runner.get('tags'):
-                        all_runners.append(runner)
-                        seen_ids.add(runner['id'])
-        except:
-            pass
-    
-    return all_runners
-
-
-def select_runner_interactive(available_runners: list, default_tags: list = None) -> list:
-    """
-    Permite seleccionar un runner y retorna sus tags
-    """
-    if not available_runners:
-        console.print("\n[yellow]⚠[/yellow] No se encontraron runners, ingresa los tags manualmente")
-        tags_input = Prompt.ask(
-            "Tags del runner (separados por coma)",
-            default=','.join(default_tags) if default_tags else "docker"
-        )
-        return [tag.strip() for tag in tags_input.split(',') if tag.strip()]
-    
-    # Mostrar runners de forma compacta
-    console.print("")
-    for idx, runner in enumerate(available_runners, 1):
-        tags_str = ', '.join(runner.get('tags', []))
-        status = "●" if runner.get('online') else "○"
-        desc = runner.get('description', f"Runner #{runner['id']}")[:40]
-        console.print(f"  {idx}. {status} {desc}")
-        console.print(f"     [dim]{tags_str}[/dim]")
-    
-    # Determinar default
-    default_idx = "1"
-    if default_tags:
-        for idx, runner in enumerate(available_runners, 1):
-            runner_tags = set(runner.get('tags', []))
-            if default_tags and set(default_tags).issubset(runner_tags):
-                default_idx = str(idx)
-                break
-    
-    selection = Prompt.ask(
-        "\nRunner a usar",
-        default=default_idx
-    )
-    
-    try:
-        idx = int(selection) - 1
-        if 0 <= idx < len(available_runners):
-            selected_runner = available_runners[idx]
-            tags = selected_runner.get('tags', [])
-            return tags
-    except ValueError:
-        pass
-    
-    # Fallback manual
-    tags_input = Prompt.ask(
-        "Tags del runner (separados por coma)",
-        default=','.join(default_tags) if default_tags else "docker"
-    )
-    return [tag.strip() for tag in tags_input.split(',') if tag.strip()]
+# Inicializar logging
+setup_logging()
 
 
 @click.group()
@@ -249,541 +172,482 @@ def create(project_path, namespace, environments, create_project):
     
     PROJECT_PATH: Ruta del proyecto en GitLab (ej: grupo/proyecto)
     """
-    console.print(f"\n[bold blue]→[/bold blue] Configurando CI/CD: [bold]{project_path}[/bold]\n")
-    
-    # Cargar configuración
-    config = Config()
-    if not config.is_configured():
-        console.print("[red]✗[/red] Ejecuta primero: [cyan]gitlab-cicd init[/cyan]")
-        return
-    
     try:
+        logger.info(f"Iniciando creación de CI/CD para {project_path}")
+        console.print(f"\n[bold blue]→[/bold blue] Configurando CI/CD: [bold]{project_path}[/bold]\n")
+        
+        # Validar inputs
+        validate_project_path(project_path)
+        validate_k8s_namespace(namespace)
+        
+        # Cargar configuración
+        config = Config()
+        if not config.is_configured():
+            raise ConfigurationError(
+                "No hay configuración. Ejecuta: gitlab-cicd init"
+            )
+        
         # Conectar a GitLab
-        try:
-            client = GitLabClient(config.get('gitlab_url'), config.get('gitlab_token'))
-            console.print("[dim]Conectado a GitLab[/dim]")
-        except Exception as auth_error:
-            error_msg = str(auth_error).lower()
-            if '401' in error_msg or 'invalid_token' in error_msg or 'unauthorized' in error_msg:
-                console.print("[red]✗[/red] Token inválido o expirado")
-                console.print("[dim]Ejecuta:[/dim] [cyan]gitlab-cicd init[/cyan]")
-                return
-            else:
-                raise
+        client = _connect_to_gitlab(config)
         
         # Obtener o crear proyecto
-        if create_project:
-            try:
-                project = client.create_project_if_not_exists(project_path)
-                console.print(f"[green]✓[/green] Proyecto: {project['name']}")
-            except ValueError as e:
-                console.print(f"[red]✗[/red] El grupo debe existir primero")
-                return
-        else:
-            try:
-                project = client.get_project(project_path)
-                console.print(f"[green]✓[/green] Proyecto: {project['name']}")
-            except Exception as e:
-                if "404" in str(e):
-                    console.print(f"[red]✗[/red] Proyecto no existe. Usa: [cyan]--create-project[/cyan]")
-                else:
-                    console.print(f"[red]✗[/red] {str(e)}")
-                return
+        project = _get_or_create_project(client, project_path, create_project)
         
-        # Obtener clusters disponibles (GitLab Agents) - silenciosamente
-        available_clusters = []
-        groups_checked = set()
+        # Configurar servicios
+        variable_service = VariableService(console)
+        runner_service = RunnerService(client, console)
+        k8s_service = K8sConfigService(console)
         
-        def get_agents_from_group(group_path):
-            try:
-                encoded_path = quote(group_path, safe='')
-                group = client.gl.groups.get(encoded_path)
-                try:
-                    projects = group.projects.list(get_all=True)
-                    for proj in projects:
-                        try:
-                            full_proj = client.gl.projects.get(proj.id)
-                            agents = full_proj.cluster_agents.list(get_all=True)
-                            if agents:
-                                for agent in agents:
-                                    cluster_context = f"{proj.path_with_namespace}:{agent.name}"
-                                    if cluster_context not in available_clusters:
-                                        available_clusters.append(cluster_context)
-                        except:
-                            pass
-                except:
-                    pass
-            except:
-                pass
-        
-        # Buscar en grupos relevantes
-        if config.get('template_repo'):
-            template_parts = config.get('template_repo').split('/')
-            for i in range(1, len(template_parts)):
-                group_path = '/'.join(template_parts[:i])
-                if group_path not in groups_checked:
-                    groups_checked.add(group_path)
-                    get_agents_from_group(group_path)
-        
-        project_parts = project_path.split('/')[:-1]
-        for i in range(1, len(project_parts) + 1):
-            group_path = '/'.join(project_parts[:i])
-            if group_path not in groups_checked:
-                groups_checked.add(group_path)
-                get_agents_from_group(group_path)
-        
-        if available_clusters:
-            console.print(f"[green]✓[/green] {len(available_clusters)} cluster(s) disponible(s)")
-        
-        # Obtener runners disponibles
-        available_runners = get_available_runners(client, project_path)
+        # Descubrir runners
+        console.print("[dim]Descubriendo runners...[/dim]")
+        available_runners = runner_service.discover_available_runners(
+            project_path,
+            config.get('template_repo')
+        )
         if available_runners:
             console.print(f"[green]✓[/green] {len(available_runners)} runner(s) disponible(s)")
         
-        # Configuración del pipeline - PRIMERO para poder filtrar templates
-        console.print("\n[bold]Configuración:[/bold]")
-        
-        # Componentes
-        project_name = project_path.split('/')[-1]
-        components_input = Prompt.ask(
-            "Componentes (separados por coma)",
-            default="web"
-        )
-        components = [c.strip() for c in components_input.split(',') if c.strip()]
-        
-        # Docker
-        use_docker = Confirm.ask("¿Usa Docker?", default=True)
-        
-        dockerfile_paths = {}
-        container_ports = {}
-        if use_docker:
-            for component in components:
-                default_path = "Dockerfile" if len(components) == 1 else f"{component}/Dockerfile"
-                dockerfile_path = Prompt.ask(
-                    f"Dockerfile de '{component}'",
-                    default=default_path
-                )
-                dockerfile_paths[component] = dockerfile_path
-                
-                port = Prompt.ask(
-                    f"Puerto expuesto por '{component}'",
-                    default="80"
-                )
-                container_ports[component] = port
-                console.print(f"  [green]✓[/green] {component}: {dockerfile_path} (puerto {port})")
-        
-        # Variables configuration (ANTES de K8s manifests)
-        console.print("\n[bold]Variables de entorno:[/bold]")
-        config_vars = {}
-        secret_vars = {}
-        
-        for component in components:
-            console.print(f"\n[bold cyan]{component}[/bold cyan]")
-            console.print("[dim]Introduce las variables de entorno (una por una, vacío para terminar)[/dim]")
-            
-            comp_config_vars = []
-            comp_secret_vars = []
-            
-            while True:
-                var_name = Prompt.ask(
-                    f"Nombre de variable",
-                    default=""
-                )
-                
-                if not var_name.strip():
-                    break
-                
-                is_secret = Confirm.ask(
-                    f"¿'{var_name}' es un secret?",
-                    default=False
-                )
-                
-                if is_secret:
-                    comp_secret_vars.append(var_name)
-                    console.print(f"  [red]🔒[/red] {var_name} → Secret")
-                else:
-                    comp_config_vars.append(var_name)
-                    console.print(f"  [green]✓[/green] {var_name} → ConfigMap")
-            
-            if comp_config_vars:
-                config_vars[component] = comp_config_vars
-            if comp_secret_vars:
-                secret_vars[component] = comp_secret_vars
-            
-            total_vars = len(comp_config_vars) + len(comp_secret_vars)
-            if total_vars > 0:
-                console.print(f"[green]✓[/green] {total_vars} variable(s) configurada(s)")
-            else:
-                console.print("[dim]Sin variables[/dim]")
-        
-        # Kubernetes deployment configuration
-        console.print("\n[bold]Despliegue en Kubernetes:[/bold]")
-        k8s_deployment = {}
-        k8s_manifests = {}
-        
-        for component in components:
-            deploy_to_k8s = Confirm.ask(
-                f"¿'{component}' se despliega en Kubernetes?",
-                default=True
-            )
-            k8s_deployment[component] = deploy_to_k8s
-            
-            if deploy_to_k8s:
-                console.print(f"  Manifiestos para '{component}':")
-                manifests = []
-                
-                if Confirm.ask("    - Namespace", default=False):
-                    manifests.append('namespace')
-                
-                # Auto-activar Secrets si hay secret_vars
-                if component in secret_vars and secret_vars[component]:
-                    manifests.append('secrets')
-                    console.print(f"    - Secrets [dim](auto: {len(secret_vars[component])} secret(s))[/dim]")
-                elif Confirm.ask("    - Secrets", default=True):
-                    manifests.append('secrets')
-                
-                # Auto-activar ConfigMaps si hay config_vars
-                if component in config_vars and config_vars[component]:
-                    manifests.append('configs')
-                    console.print(f"    - ConfigMaps [dim](auto: {len(config_vars[component])} var(s))[/dim]")
-                elif Confirm.ask("    - ConfigMaps", default=True):
-                    manifests.append('configs')
-                
-                if Confirm.ask("    - Deployment", default=True):
-                    manifests.append('deployment')
-                if Confirm.ask("    - Ingress", default=True):
-                    manifests.append('ingress')
-                if Confirm.ask("    - Service", default=True):
-                    manifests.append('service')
-                if Confirm.ask("    - PVC (PersistentVolumeClaim)", default=False):
-                    manifests.append('pvc')
-                
-                k8s_manifests[component] = manifests
-                console.print(f"  [green]✓[/green] {', '.join(manifests)}")
-        
-        # Resource profiles configuration
-        console.print("\n[bold]Perfiles de recursos disponibles:[/bold]")
-        console.print("  [cyan]xsmall[/cyan]: CPU 100m-500m,  RAM 64Mi-256Mi")
-        console.print("  [cyan]small[/cyan]:  CPU 250m-500m,  RAM 256Mi-512Mi")
-        console.print("  [cyan]medium[/cyan]: CPU 500m-1000m, RAM 512Mi-1Gi")
-        console.print("  [cyan]large[/cyan]:  CPU 1000m-2000m, RAM 1Gi-2Gi")
-        console.print("  [cyan]xlarge[/cyan]: CPU 2000m-4000m, RAM 2Gi-4Gi")
-        
-        resource_profiles = {}
-        for component in components:
-            if k8s_deployment.get(component, True):  # Asumir K8s por defecto
-                profile = Prompt.ask(
-                    f"Perfil de recursos para '{component}'",
-                    choices=["xsmall", "small", "medium", "large", "xlarge"],
-                    default="medium"
-                )
-                resource_profiles[component] = profile
-                console.print(f"  [green]✓[/green] {component}: {profile}")
-        
-        # PVC (PersistentVolumeClaim) configuration
-        pvc_volumes = {}
-        for component in components:
-            if k8s_deployment.get(component) and 'pvc' in k8s_manifests.get(component, []):
-                console.print(f"\n[bold]Configuración de PVC para '{component}':[/bold]")
-                console.print("[dim]Puedes definir múltiples volúmenes[/dim]")
-                
-                volumes_list = []
-                while True:
-                    volume_name = Prompt.ask(
-                        f"Nombre del volumen (vacío para terminar)",
-                        default="uploads" if not volumes_list else ""
-                    )
-                    
-                    if not volume_name.strip():
-                        break
-                    
-                    mount_path = Prompt.ask(
-                        f"Ruta de montaje para '{volume_name}'",
-                        default="/opt/app/public/uploads"
-                    )
-                    
-                    storage = Prompt.ask(
-                        f"Tamaño de storage (ej: 5Gi, 10Gi)",
-                        default="5Gi"
-                    )
-                    
-                    volumes_list.append({
-                        'name': volume_name,
-                        'mount_path': mount_path,
-                        'storage': storage
-                    })
-                    
-                    console.print(f"  [green]✓[/green] {volume_name} → {mount_path} ({storage})")
-                
-                if volumes_list:
-                    pvc_volumes[component] = volumes_list
-                    console.print(f"  [green]✓[/green] {len(volumes_list)} volumen(es) configurado(s)")
-                else:
-                    console.print(f"  [dim]Sin volúmenes[/dim]")
-        
-        # Cargar plantillas CON FILTRO de manifiestos seleccionados
-        console.print(f"\n[dim]Cargando plantillas filtradas...[/dim]")
-        template_manager = TemplateManager(config.get('template_repo'))
-        templates = template_manager.load_from_gitlab(
-            config.get('gitlab_url'),
-            config.get('gitlab_token'),
-            config.get('template_repo'),
-            k8s_manifests_filter=k8s_manifests
+        # Recopilar configuración
+        project_config = _collect_project_configuration(
+            project_path,
+            namespace,
+            environments
         )
         
-        if not templates:
-            console.print("[red]✗[/red] No se encontraron plantillas")
-            return
-        
-        console.print(f"[green]✓[/green] {len(templates)} plantilla(s) cargada(s)")
-        
-        # Analizar variables silenciosamente
-        template_vars, cicd_vars = template_manager.extract_variables(templates)
-        include_vars = template_manager.extract_variables_from_includes(
-            templates,
-            config.get('gitlab_url'),
-            config.get('gitlab_token')
+        # Configurar componentes
+        components_config = _configure_components(
+            project_config['components'],
+            variable_service,
+            k8s_service
         )
         
-        # Runner
+        # Seleccionar runner
         console.print("\n[bold]Selecciona el runner:[/bold]")
         default_runner_tags = ['buildkit', 'scaleway', 'worko-internal']
-        runner_tags = select_runner_interactive(available_runners, default_runner_tags)
-        
-        # Prefijo
-        suggested_prefix = project_name.split('-')[0] if '-' in project_name else project_name[:4]
-        tag_prefix = Prompt.ask(
-            "Prefijo para tags de release",
-            default=suggested_prefix
+        runner_tags = runner_service.select_runner_interactive(
+            available_runners,
+            default_runner_tags
         )
         
         # Configurar clusters por entorno
-        env_list = [e.strip() for e in environments.split(',')]
-        kube_contexts = {}
+        kube_contexts = _configure_kube_contexts(
+            client,
+            project_config['environments'],
+            config.get('template_repo'),
+            project_path
+        )
+        components_config['kube_contexts'] = kube_contexts
         
-        console.print("\n[bold]Clusters por entorno:[/bold]")
-        if available_clusters:
-            for idx, cluster in enumerate(available_clusters, 1):
-                console.print(f"  {idx}. {cluster}")
+        # Cargar plantillas
+        templates = _load_templates(config, components_config['k8s_manifests'])
+        if not templates:
+            logger.error("No se pudieron cargar las plantillas")
+            raise ConfigurationError("No se encontraron plantillas")
         
-        for env in env_list:
-            if available_clusters:
-                cluster_choice = Prompt.ask(
-                    f"Cluster para [cyan]{env}[/cyan]",
-                    default="1"
-                )
-                try:
-                    cluster_idx = int(cluster_choice) - 1
-                    if 0 <= cluster_idx < len(available_clusters):
-                        kube_contexts[env] = available_clusters[cluster_idx]
-                    else:
-                        kube_contexts[env] = cluster_choice
-                except ValueError:
-                    kube_contexts[env] = cluster_choice
-            else:
-                kube_contexts[env] = Prompt.ask(
-                    f"KUBE_CONTEXT [cyan]{env}[/cyan]",
-                    default=f"{config.get('template_repo')}:cluster-{env}"
-                )
+        # Generar y crear archivos
+        files_created = _generate_and_create_files(
+            client,
+            project,
+            templates,
+            {**project_config, **components_config, 'runner_tags': runner_tags}
+        )
         
-        # Variables del template
-        variables = {
-            'project_name': project['name'],
-            'project_path': project_path,
-            'namespace': namespace,
-            'environments': env_list,
-            'template_repo': config.get('template_repo'),
-            'components': components,
-            'runner_tags': runner_tags,
-            'tag_prefix': tag_prefix,
-            'use_docker': use_docker,
-            'dockerfile_paths': dockerfile_paths,
-            'container_ports': container_ports,
-            'resource_profiles': resource_profiles,
-            'k8s_deployment': k8s_deployment,
-            'k8s_manifests': k8s_manifests,
-            'config_vars': config_vars,
-            'secret_vars': secret_vars,
-            'pvc_volumes': pvc_volumes,
-        }
+        console.print(f"[green]✓[/green] {files_created} archivo(s) creado(s)")
         
-        # Variables adicionales de plantilla
-        if template_vars:
-            console.print("\n[bold]Variables de plantilla:[/bold]")
-            for var in template_vars:
-                if var not in variables:
-                    default_value = ""
-                    if var == 'docker_registry':
-                        default_value = "registry.gitlab.com"
-                    elif var == 'docker_image':
-                        default_value = project_path
-                        
-                    value = Prompt.ask(
-                        f"{var}",
-                        default=default_value if default_value else None
-                    )
-                    variables[var] = value
-        
-        # Variables CI/CD
-        cicd_variables = {}
-        if cicd_vars:
-            console.print("\n[bold]Variables CI/CD:[/bold]")
-            for var in cicd_vars:
-                value = Prompt.ask(f"{var}")
-                is_protected = Confirm.ask(f"  Protegida?", default=False)
-                is_masked = Confirm.ask(f"  Enmascarada?", default=True)
-                
-                cicd_variables[var] = {
-                    'value': value,
-                    'protected': is_protected,
-                    'masked': is_masked
-                }
-        
-        # Generar archivos
-        console.print("\n[dim]Generando archivos...[/dim]")
-        generator = K8sGenerator()
-        generator.set_cicd_vars(cicd_vars)
-        
-        # Separar templates de K8s y pipeline
-        k8s_templates = {k: v for k, v in templates.items() if k.startswith('k8s/')}
-        pipeline_templates = {k: v for k, v in templates.items() if not k.startswith('k8s/')}
-        
-        # Procesar pipeline templates (solo una vez)
-        processed_files = generator.process_templates(pipeline_templates, variables, preserve_cicd_vars=True)
-        
-        # Procesar K8s templates por componente
-        for component in components:
-            # Variables específicas del componente
-            component_vars = {
-                **variables,
-                'component': component
-            }
-            
-            # Procesar templates K8s para este componente
-            component_k8s = generator.process_templates(k8s_templates, component_vars, preserve_cicd_vars=True)
-            
-            # Reescribir rutas para incluir el componente: k8s/01-namespace.yaml -> k8s/web/01-namespace.yaml
-            for file_path, content in component_k8s.items():
-                # Solo incluir archivos si están en los manifests seleccionados
-                base_name = file_path.split('/')[-1]  # 01-namespace.yaml
-                manifest_type = None
-                
-                # Mapear archivo a tipo de manifest
-                if '01-namespace' in base_name:
-                    manifest_type = 'namespace'
-                elif '02-secrets' in base_name:
-                    manifest_type = 'secrets'
-                elif '03-configs' in base_name:
-                    manifest_type = 'configs'
-                elif '04-deployment' in base_name:
-                    manifest_type = 'deployment'
-                elif '05-ingress' in base_name:
-                    manifest_type = 'ingress'
-                elif '06-service' in base_name:
-                    manifest_type = 'service'
-                elif '07-pvc' in base_name:
-                    manifest_type = 'pvc'
-                
-                # Solo incluir si el manifest está seleccionado para este componente
-                if manifest_type and manifest_type in k8s_manifests.get(component, []):
-                    new_path = f"k8s/{component}/{base_name}"
-                    processed_files[new_path] = content
-        
-        # Crear archivos en el repositorio
-        for file_path, content in processed_files.items():
-            client.create_or_update_file(
-                project['id'],
-                file_path,
-                content,
-                f"Add CI/CD: {file_path}"
-            )
-        console.print(f"[green]✓[/green] {len(processed_files)} archivo(s) creado(s)")
-        
-        # Configurar variables
+        # Configurar variables CI/CD
         console.print("[dim]Configurando variables...[/dim]")
-        
-        # KUBE_CONTEXT por entorno
-        for env, kube_context in kube_contexts.items():
-            client.create_or_update_variable(
-                project['id'],
-                'KUBE_CONTEXT',
-                kube_context,
-                protected=False,
-                masked=False,
-                environment_scope=env
-            )
-        
-        # Variables de ConfigMap (no protegidas, no enmascaradas)
-        for component, vars_list in config_vars.items():
-            for var_name in vars_list:
-                # Usar placeholder, el usuario lo configurará después
-                client.create_or_update_variable(
-                    project['id'],
-                    var_name,
-                    'CHANGE_ME',
-                    protected=False,
-                    masked=False,
-                    environment_scope='*'
-                )
-        
-        # Variables de Secrets (protegidas, enmascaradas)
-        for component, vars_list in secret_vars.items():
-            for var_name in vars_list:
-                # Usar placeholder, el usuario lo configurará después
-                client.create_or_update_variable(
-                    project['id'],
-                    var_name,
-                    'CHANGE_ME',
-                    protected=False,
-                    masked=True,
-                    environment_scope='*'
-                )
-        
-        if cicd_variables:
-            for key, var_config in cicd_variables.items():
-                client.create_or_update_variable(
-                    project['id'],
-                    key,
-                    var_config['value'],
-                    protected=var_config['protected'],
-                    masked=var_config['masked']
-                )
+        variables_count = variable_service.create_gitlab_variables(
+            client,
+            project['id'],
+            components_config['config_vars'],
+            components_config['secret_vars'],
+            components_config['kube_contexts']
+        )
         console.print(f"[green]✓[/green] Variables configuradas")
         
-        # Informar sobre variables que necesitan valores
-        total_vars = sum(len(v) for v in config_vars.values()) + sum(len(v) for v in secret_vars.values())
-        if total_vars > 0:
-            console.print(f"\n[yellow]⚠[/yellow] {total_vars} variable(s) creada(s) sin valor:")
-            for component, vars_list in config_vars.items():
-                for var_name in vars_list:
-                    console.print(f"  • {var_name} (ConfigMap)")
-            for component, vars_list in secret_vars.items():
-                for var_name in vars_list:
-                    console.print(f"  • {var_name} (Secret)")
-            console.print(f"\n[dim]Configúralas en:[/dim] {project['web_url']}/-/settings/ci_cd")
+        # Mostrar variables pendientes
+        variable_service.display_pending_configuration(
+            components_config['config_vars'],
+            components_config['secret_vars'],
+            project['web_url']
+        )
         
+        # Resumen final
         console.print(f"\n[bold green]✓ CI/CD configurado![/bold green]")
         console.print(f"[dim]Ver pipeline:[/dim] {project['web_url']}/-/pipelines")
         
-    except gitlab.exceptions.GitlabAuthenticationError as e:
-        console.print("[red]✗[/red] Error de autenticación: Token de GitLab inválido o expirado")
+        logger.info(f"CI/CD creado exitosamente para {project_path}")
+        
+    except ValidationError as e:
+        console.print(f"[red]✗[/red] {e.message}")
+        console.print(f"[dim]{e.reason}[/dim]")
+        logger.error(f"Error de validación: {e.message}")
+    except AuthenticationError as e:
+        console.print(f"[red]✗[/red] {e.message}")
         console.print("\n[yellow]💡 Solución:[/yellow]")
-        console.print("  1. Genera un nuevo token en GitLab:")
+        console.print("  1. Genera un nuevo token en GitLab")
         console.print(f"     [cyan]{config.get('gitlab_url')}/-/user_settings/personal_access_tokens[/cyan]")
         console.print("  2. Permisos requeridos: [bold]api[/bold], [bold]read_repository[/bold], [bold]write_repository[/bold]")
-        console.print("  3. Reinicializa la configuración:")
-        console.print("     [cyan]gitlab-cicd init[/cyan]")
-    except gitlab.exceptions.GitlabGetError as e:
-        if "404" in str(e):
-            console.print(f"[red]✗[/red] No se encontró el recurso solicitado")
-            console.print("[yellow]💡[/yellow] Verifica que el proyecto/grupo existe y tienes acceso")
-        else:
-            console.print(f"[red]✗[/red] Error al acceder a GitLab: {str(e)}")
+        console.print("  3. Reinicializa: [cyan]gitlab-cicd init[/cyan]")
+        logger.error(f"Error de autenticación: {e.message}")
+    except ProjectNotFoundError as e:
+        console.print(f"[red]✗[/red] {e.message}")
+        console.print(f"[yellow]💡[/yellow] Usa: [cyan]--create-project[/cyan] para crearlo")
+        logger.error(f"Proyecto no encontrado: {e.project_path}")
+    except GitLabCICDError as e:
+        console.print(f"[red]✗[/red] {e.message}")
+        if e.details:
+            console.print(f"[dim]Detalles: {e.details}[/dim]")
+        logger.error(f"Error: {e.message}", extra=e.details)
     except Exception as e:
-        error_msg = str(e)
-        console.print(f"[red]✗[/red] Error: {error_msg}")
-        if '--debug' in click.get_current_context().args:
-            raise
+        console.print(f"[red]✗[/red] Error inesperado: {str(e)}")
+        logger.exception("Error inesperado")
+        raise
+
+
+def _connect_to_gitlab(config: Config) -> GitLabClient:
+    """Conecta a GitLab y maneja errores de autenticación"""
+    try:
+        client = GitLabClient(config.get('gitlab_url'), config.get('gitlab_token'))
+        console.print("[dim]Conectado a GitLab[/dim]")
+        logger.info("Conexión a GitLab establecida")
+        return client
+    except Exception as e:
+        error_msg = str(e).lower()
+        if '401' in error_msg or 'invalid_token' in error_msg or 'unauthorized' in error_msg:
+            raise AuthenticationError("Token inválido o expirado")
+        raise
+
+
+def _get_or_create_project(client: GitLabClient, project_path: str, create_project: bool):
+    """Obtiene o crea un proyecto"""
+    try:
+        if create_project:
+            project = client.create_project_if_not_exists(project_path)
+            console.print(f"[green]✓[/green] Proyecto: {project['name']}")
+        else:
+            project = client.get_project(project_path)
+            console.print(f"[green]✓[/green] Proyecto: {project['name']}")
+        
+        logger.info(f"Proyecto obtenido/creado: {project['name']}")
+        return project
+    except ValueError as e:
+        raise ConfigurationError(str(e))
+    except Exception as e:
+        if "404" in str(e):
+            raise ProjectNotFoundError(project_path)
+        raise
+
+
+def _collect_project_configuration(project_path: str, namespace: str, environments: str) -> dict:
+    """Recopila configuración básica del proyecto"""
+    console.print("\n[bold]Configuración:[/bold]")
+    
+    # Componentes
+    project_name = project_path.split('/')[-1]
+    components_input = Prompt.ask(
+        "Componentes (separados por coma)",
+        default="web"
+    )
+    components = [c.strip() for c in components_input.split(',') if c.strip()]
+    
+    # Validar nombres de componentes
+    for component in components:
+        validate_component_name(component)
+    
+    # Docker
+    use_docker = Confirm.ask("¿Usa Docker?", default=True)
+    
+    dockerfile_paths = {}
+    container_ports = {}
+    
+    if use_docker:
+        # Crear servicio K8s temporalmente para validar puertos
+        k8s_temp_service = K8sConfigService(console)
+        
+        for component in components:
+            default_path = (
+                "Dockerfile" if len(components) == 1
+                else f"{component}/Dockerfile"
+            )
+            dockerfile_path = Prompt.ask(
+                f"Dockerfile de '{component}'",
+                default=default_path
+            )
+            dockerfile_paths[component] = dockerfile_path
+            
+            port = k8s_temp_service.configure_container_port(component)
+            container_ports[component] = port
+            console.print(
+                f"  [green]✓[/green] {component}: {dockerfile_path} (puerto {port})"
+            )
+    
+    # Prefijo de tags
+    suggested_prefix = (
+        project_name.split('-')[0] if '-' in project_name
+        else project_name[:4]
+    )
+    tag_prefix = Prompt.ask(
+        "Prefijo para tags de release",
+        default=suggested_prefix
+    )
+    
+    # Parsear entornos
+    env_list = [e.strip() for e in environments.split(',')]
+    
+    logger.info(f"Configuración recopilada: {len(components)} componentes, {len(env_list)} entornos")
+    
+    return {
+        'project_name': project_name[:63],  # Limitar longitud
+        'project_path': project_path,
+        'namespace': namespace,
+        'environments': env_list,
+        'components': components,
+        'use_docker': use_docker,
+        'dockerfile_paths': dockerfile_paths,
+        'container_ports': container_ports,
+        'tag_prefix': tag_prefix,
+        'template_repo': None,  # Se añadirá después
+    }
+
+
+def _configure_components(components: list, variable_service: VariableService, k8s_service: K8sConfigService) -> dict:
+    """Configura variables, K8s y recursos para cada componente"""
+    # Variables de entorno
+    console.print("\n[bold]Variables de entorno:[/bold]")
+    config_vars = {}
+    secret_vars = {}
+    
+    for component in components:
+        comp_config, comp_secret = variable_service.collect_component_variables(component)
+        if comp_config:
+            config_vars[component] = comp_config
+        if comp_secret:
+            secret_vars[component] = comp_secret
+    
+    # Deployment K8s
+    console.print("\n[bold]Despliegue en Kubernetes:[/bold]")
+    k8s_deployment = {}
+    k8s_manifests = {}
+    resource_profiles = {}
+    pvc_volumes = {}
+    
+    for component in components:
+        has_configs = component in config_vars
+        has_secrets = component in secret_vars
+        
+        deploy, manifests = k8s_service.configure_component_deployment(
+            component,
+            has_configs,
+            has_secrets
+        )
+        
+        k8s_deployment[component] = deploy
+        k8s_manifests[component] = manifests
+        
+        if deploy:
+            # Perfil de recursos
+            profile = k8s_service.select_resource_profile(component)
+            resource_profiles[component] = profile
+            
+            # PVC si está habilitado
+            if 'pvc' in manifests:
+                volumes = k8s_service.configure_pvc_volumes(component)
+                if volumes:
+                    pvc_volumes[component] = volumes
+    
+    logger.info(f"Componentes configurados: {len(k8s_deployment)} deployments")
+    
+    return {
+        'config_vars': config_vars,
+        'secret_vars': secret_vars,
+        'k8s_deployment': k8s_deployment,
+        'k8s_manifests': k8s_manifests,
+        'resource_profiles': resource_profiles,
+        'pvc_volumes': pvc_volumes,
+    }
+
+
+def _configure_kube_contexts(client: GitLabClient, env_list: list, template_repo: str, project_path: str) -> dict:
+    """Configura contextos de Kubernetes por entorno"""
+    kube_contexts = {}
+    
+    console.print("\n[bold]Clusters por entorno:[/bold]")
+    
+    # Descubrir clusters/agents disponibles
+    console.print("\n[dim]Descubriendo clusters disponibles...[/dim]")
+    clusters = []
+    
+    # Función para buscar agentes en un grupo
+    def get_agents_from_group(group_path: str):
+        try:
+            from urllib.parse import quote
+            encoded_path = quote(group_path, safe='')
+            group = client.gl.groups.get(encoded_path)
+            projects = group.projects.list(get_all=True)
+            
+            for proj in projects:
+                try:
+                    full_proj = client.gl.projects.get(proj.id)
+                    agents = full_proj.cluster_agents.list(get_all=True)
+                    
+                    for agent in agents:
+                        cluster_context = f"{proj.path_with_namespace}:{agent.name}"
+                        # Evitar duplicados
+                        if not any(c['context'] == cluster_context for c in clusters):
+                            clusters.append({
+                                'name': agent.name,
+                                'context': cluster_context,
+                                'config_project': proj.path_with_namespace,
+                                'type': 'group'
+                            })
+                except Exception:
+                    pass
+        except Exception:
+            pass
+    
+    # Buscar en grupos padre del template_repo
+    if template_repo:
+        template_parts = template_repo.split('/')
+        # Buscar desde el grupo raíz hasta el template repo
+        for i in range(1, len(template_parts)):
+            group_path = '/'.join(template_parts[:i])
+            get_agents_from_group(group_path)
+    
+    # Buscar en grupos padre del proyecto actual
+    if project_path:
+        project_parts = project_path.split('/')
+        for i in range(1, len(project_parts)):
+            group_path = '/'.join(project_parts[:i])
+            get_agents_from_group(group_path)
+    
+    # Mostrar clusters encontrados
+    if clusters:
+        console.print(f"\n[green]✓[/green] {len(clusters)} cluster(s) encontrado(s):")
+        for i, cluster in enumerate(clusters, 1):
+            type_label = f"[dim]({cluster['config_project']})[/dim]"
+            console.print(f"  {i}. [cyan]{cluster['context']}[/cyan] {type_label}")
+    else:
+        console.print("[yellow]⚠[/yellow] No se encontraron Kubernetes Agents configurados")
+        console.print("[dim]   Los agentes deben estar registrados en GitLab → Operate → Kubernetes clusters[/dim]")
+        console.print("[dim]   Se usarán valores predeterminados basados en el template_repo[/dim]")
+    
+    # Configurar contexto por entorno
+    console.print()
+    for env in env_list:
+        # Sugerencia basada en el env
+        default_context = f"{template_repo}:cluster-{env}" if template_repo else f"cluster-{env}"
+        
+        # Si hay clusters disponibles, permitir selección directa
+        if clusters:
+            cluster_choice = Prompt.ask(
+                f"Selecciona cluster para [cyan]{env}[/cyan] (1-{len(clusters)}) o Enter para escribir manualmente",
+                choices=[str(i) for i in range(1, len(clusters) + 1)] + [""],
+                default=""
+            )
+            
+            if cluster_choice:
+                kube_contexts[env] = clusters[int(cluster_choice) - 1]['context']
+            else:
+                kube_contexts[env] = Prompt.ask(
+                    f"  KUBE_CONTEXT para {env}",
+                    default=default_context
+                )
+        else:
+            # No hay clusters, pedir directamente
+            kube_contexts[env] = Prompt.ask(
+                f"KUBE_CONTEXT [cyan]{env}[/cyan]",
+                default=default_context
+            )
+    
+    return kube_contexts
+
+
+def _load_templates(config: Config, k8s_manifests_filter: dict) -> dict:
+    """Carga plantillas desde GitLab"""
+    console.print(f"\n[dim]Cargando plantillas filtradas...[/dim]")
+    
+    template_manager = TemplateManager(config.get('template_repo'))
+    templates = template_manager.load_from_gitlab(
+        config.get('gitlab_url'),
+        config.get('gitlab_token'),
+        config.get('template_repo'),
+        k8s_manifests_filter=k8s_manifests_filter
+    )
+    
+    if templates:
+        console.print(f"[green]✓[/green] {len(templates)} plantilla(s) cargada(s)")
+        logger.info(f"Plantillas cargadas: {len(templates)}")
+    
+    return templates
+
+
+def _generate_and_create_files(client: GitLabClient, project: dict, templates: dict, variables: dict) -> int:
+    """Genera y crea archivos en el repositorio"""
+    console.print("\n[dim]Generando archivos...[/dim]")
+    
+    generator = K8sGenerator()
+    
+    # Separar templates de K8s y pipeline
+    k8s_templates = {k: v for k, v in templates.items() if k.startswith('k8s/')}
+    pipeline_templates = {k: v for k, v in templates.items() if not k.startswith('k8s/')}
+    
+    # Procesar pipeline templates (solo una vez)
+    processed_files = generator.process_templates(pipeline_templates, variables, preserve_cicd_vars=True)
+    
+    # Procesar K8s templates por componente
+    for component in variables['components']:
+        # Variables específicas del componente
+        component_vars = {
+            **variables,
+            'component': component
+        }
+        
+        # Procesar templates K8s para este componente
+        component_k8s = generator.process_templates(k8s_templates, component_vars, preserve_cicd_vars=True)
+        
+        # Reescribir rutas: k8s/01-namespace.yaml -> k8s/web/01-namespace.yaml
+        for file_path, content in component_k8s.items():
+            base_name = file_path.split('/')[-1]
+            manifest_type = _extract_manifest_type(base_name)
+            
+            # Solo incluir si el manifest está seleccionado para este componente
+            if manifest_type and manifest_type in variables['k8s_manifests'].get(component, []):
+                new_path = f"k8s/{component}/{base_name}"
+                processed_files[new_path] = content
+    
+    # Crear archivos en el repositorio
+    for file_path, content in processed_files.items():
+        # Sanitizar path por seguridad
+        safe_path = sanitize_file_path(file_path)
+        client.create_or_update_file(
+            project['id'],
+            safe_path,
+            content,
+            f"Add CI/CD: {safe_path}"
+        )
+    
+    logger.info(f"Archivos generados: {len(processed_files)}")
+    return len(processed_files)
+
+
+def _extract_manifest_type(base_name: str) -> str:
+    """Extrae el tipo de manifest del nombre de archivo"""
+    manifest_mapping = {
+        '01-namespace': 'namespace',
+        '02-secrets': 'secrets',
+        '03-configs': 'configs',
+        '04-deployment': 'deployment',
+        '05-ingress': 'ingress',
+        '06-service': 'service',
+        '07-pvc': 'pvc',
+    }
+    
+    for pattern, manifest_type in manifest_mapping.items():
+        if pattern in base_name:
+            return manifest_type
+    
+    return None
 
 
 @main.command()

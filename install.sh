@@ -1,6 +1,6 @@
 #!/bin/bash
-# Instalador simple de GitLab CI/CD Creator
-# Uso: ./install.sh
+# GitLab CI/CD Creator - Instalador
+# Detecta automáticamente el entorno e instala correctamente
 
 set -e
 
@@ -14,9 +14,10 @@ echo ""
 if ! command -v python3 &> /dev/null; then
     echo "❌ Error: Python 3 no está instalado"
     echo ""
-    echo "Por favor instala Python 3.8 o superior:"
-    echo "  • macOS: brew install python3"
-    echo "  • Ubuntu/Debian: sudo apt install python3 python3-pip"
+    echo "Instala Python 3.8 o superior:"
+    echo "  • macOS:        brew install python3"
+    echo "  • Ubuntu/Debian: sudo apt install python3 python3-pip python3-venv"
+    echo "  • Fedora/RHEL:  sudo dnf install python3 python3-pip"
     echo ""
     exit 1
 fi
@@ -24,11 +25,23 @@ fi
 PYTHON_VERSION=$(python3 --version | cut -d' ' -f2 | cut -d'.' -f1,2)
 echo "✓ Python $PYTHON_VERSION detectado"
 
+# Instalar dependencia de sistema para keyring (almacenamiento seguro)
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    echo ""
+    echo "📦 Verificando dependencias del sistema (keyring)..."
+    if ! dpkg -s python3-dbus &> /dev/null 2>&1 && ! rpm -q python3-dbus &> /dev/null 2>&1; then
+        echo "⚠️  Recomendado: Instalar python3-dbus para almacenamiento seguro de tokens"
+        echo "   Ubuntu/Debian: sudo apt install python3-dbus"
+        echo "   Fedora/RHEL:   sudo dnf install python3-dbus"
+        echo ""
+    fi
+fi
+
 # Detectar e instalar con pipx (recomendado)
 if command -v pipx &> /dev/null; then
     echo "✓ pipx detectado"
     echo ""
-    echo "📦 Instalando gitlab-cicd globalmente..."
+    echo "📦 Instalando gitlab-cicd con pipx..."
     pipx install . --force
     
     echo ""
@@ -39,16 +52,18 @@ if command -v pipx &> /dev/null; then
     echo "El comando 'gitlab-cicd' está disponible globalmente."
     echo ""
     echo "Próximos pasos:"
-    echo "  1️⃣  gitlab-cicd init      # Configurar credenciales"
-    echo "  2️⃣  gitlab-cicd --help    # Ver comandos disponibles"
+    echo "  1️⃣  gitlab-cicd init         # Configurar credenciales"
+    echo "  2️⃣  gitlab-cicd --help       # Ver todos los comandos"
+    echo "  3️⃣  gitlab-cicd create --help # Ver opciones de creación"
     echo ""
     
 else
-    # pipx no está instalado, usar pip install --user
+    # pipx no disponible, usar pip install --user
     echo ""
-    echo "⚙️  pipx no está instalado. Usando instalación estándar..."
+    echo "⚙️  pipx no detectado. Usando instalación con pip..."
+    echo "   💡 Tip: Instala pipx para mejor gestión: python3 -m pip install --user pipx"
     echo ""
-    echo "📦 Instalando gitlab-cicd globalmente..."
+    echo "📦 Instalando gitlab-cicd..."
     
     # Detectar si estamos en un virtualenv
     if [[ -n "$VIRTUAL_ENV" ]]; then

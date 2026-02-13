@@ -1,9 +1,13 @@
 #!/bin/bash
+# GitLab CI/CD Creator - Script de Verificación
+# Valida que la instalación funcione correctamente
 
-# Script de verificación del setup del proyecto
-# Ejecuta: chmod +x verify_setup.sh && ./verify_setup.sh
+set -e
 
-echo "🔍 Verificando el setup del proyecto GitLab CI/CD Creator..."
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  🔍 GitLab CI/CD Creator - Verificación"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
 # Colores
@@ -12,153 +16,250 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Contadores
-errors=0
-warnings=0
-
-# Función para verificar
-check() {
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓${NC} $1"
-    else
-        echo -e "${RED}✗${NC} $1"
-        ((errors++))
-    fi
+success() {
+    echo -e "${GREEN}✓${NC} $1"
 }
 
-check_warning() {
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓${NC} $1"
-    else
-        echo -e "${YELLOW}⚠${NC} $1"
-        ((warnings++))
-    fi
+error() {
+    echo -e "${RED}✗${NC} $1"
 }
 
-echo "📦 Verificando archivos de configuración..."
+warning() {
+    echo -e "${YELLOW}⚠${NC} $1"
+}
 
-# Verificar archivos principales
-[ -f "pyproject.toml" ]; check "pyproject.toml existe"
-[ -f "setup.py" ]; check "setup.py existe"
-[ -f "requirements.txt" ]; check "requirements.txt existe"
-[ -f "requirements-dev.txt" ]; check "requirements-dev.txt existe"
-[ -f "README.md" ]; check "README.md existe"
-[ -f "LICENSE" ]; check "LICENSE existe"
-[ -f ".gitignore" ]; check ".gitignore existe"
-[ -f "Makefile" ]; check "Makefile existe"
-
-echo ""
-echo "📁 Verificando estructura de directorios..."
-
-[ -d "src/gitlab_cicd_creator" ]; check "Directorio src/gitlab_cicd_creator existe"
-[ -d "tests" ]; check "Directorio tests existe"
-[ -d "docs" ]; check "Directorio docs existe"
-
-echo ""
-echo "🐍 Verificando módulos Python..."
-
-[ -f "src/gitlab_cicd_creator/__init__.py" ]; check "__init__.py existe"
-[ -f "src/gitlab_cicd_creator/cli.py" ]; check "cli.py existe"
-[ -f "src/gitlab_cicd_creator/gitlab_client.py" ]; check "gitlab_client.py existe"
-[ -f "src/gitlab_cicd_creator/template_manager.py" ]; check "template_manager.py existe"
-[ -f "src/gitlab_cicd_creator/k8s_generator.py" ]; check "k8s_generator.py existe"
-[ -f "src/gitlab_cicd_creator/config.py" ]; check "config.py existe"
-
-echo ""
-echo "🧪 Verificando tests..."
-
-[ -f "tests/__init__.py" ]; check "tests/__init__.py existe"
-[ -f "tests/test_cli.py" ]; check "test_cli.py existe"
-[ -f "tests/test_gitlab_client.py" ]; check "test_gitlab_client.py existe"
-[ -f "tests/test_template_manager.py" ]; check "test_template_manager.py existe"
-[ -f "tests/test_k8s_generator.py" ]; check "test_k8s_generator.py existe"
-[ -f "tests/test_config.py" ]; check "test_config.py existe"
-
-echo ""
-echo "📄 Verificando documentación de plantillas..."
-
-[ -f "docs/TEMPLATE_REPO_SETUP.md" ]; check "Guía TEMPLATE_REPO_SETUP.md existe"
-echo "  ℹ️  Las plantillas se cargan desde tu repositorio GitLab"
-echo "  ℹ️  Ver docs/TEMPLATE_REPO_SETUP.md para configurar el repositorio"
-
-echo ""
-echo "📚 Verificando documentación..."
-
-[ -f "README.md" ]; check "README.md existe"
-[ -f "QUICKSTART.md" ]; check "QUICKSTART.md existe"
-[ -f "NEXT_STEPS.md" ]; check "NEXT_STEPS.md existe"
-[ -f "PROJECT_SUMMARY.md" ]; check "PROJECT_SUMMARY.md existe"
-[ -f "CHANGELOG.md" ]; check "CHANGELOG.md existe"
-[ -f "docs/USAGE.md" ]; check "docs/USAGE.md existe"
-[ -f "docs/CONTRIBUTING.md" ]; check "docs/CONTRIBUTING.md existe"
-
-echo ""
-echo "🔧 Verificando herramientas..."
-
-[ -f "install.sh" ]; check "install.sh existe"
-[ -x "install.sh" ]; check "install.sh es ejecutable"
-[ -f "pytest.ini" ]; check "pytest.ini existe"
-[ -f ".flake8" ]; check ".flake8 existe"
-
-echo ""
-echo "🖥️  Verificando configuración de VSCode..."
-
-[ -f ".vscode/settings.json" ]; check_warning ".vscode/settings.json existe"
-[ -f ".vscode/launch.json" ]; check_warning ".vscode/launch.json existe"
-[ -f ".vscode/extensions.json" ]; check_warning ".vscode/extensions.json existe"
-
-echo ""
-echo "🐍 Verificando Python..."
-
+# 1. Verificar Python
+echo "1. Verificando Python..."
 if command -v python3 &> /dev/null; then
-    PYTHON_VERSION=$(python3 --version)
-    echo -e "${GREEN}✓${NC} Python instalado: $PYTHON_VERSION"
-else
-    echo -e "${RED}✗${NC} Python 3 no encontrado"
-    ((errors++))
-fi
-
-echo ""
-echo "📊 Conteo de líneas de código..."
-
-if command -v wc &> /dev/null; then
-    PYTHON_LINES=$(find src tests -name '*.py' 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
-    if [ ! -z "$PYTHON_LINES" ]; then
-        echo -e "${GREEN}✓${NC} Líneas de código Python: $PYTHON_LINES"
+    PYTHON_VERSION=$(python3 --version | cut -d' ' -f2)
+    PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d'.' -f1)
+    PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d'.' -f2)
+    
+    if [ "$PYTHON_MAJOR" -ge 3 ] && [ "$PYTHON_MINOR" -ge 8 ]; then
+        success "Python $PYTHON_VERSION (>= 3.8 requerido)"
+    else
+        error "Python $PYTHON_VERSION (se requiere >= 3.8)"
+        exit 1
     fi
-fi
-
-MODULE_COUNT=$(find src/gitlab_cicd_creator -name '*.py' -not -name '__init__.py' 2>/dev/null | wc -l | tr -d ' ')
-echo -e "${GREEN}✓${NC} Módulos principales: $MODULE_COUNT"
-
-TEST_COUNT=$(find tests -name 'test_*.py' 2>/dev/null | wc -l | tr -d ' ')
-echo -e "${GREEN}✓${NC} Archivos de test: $TEST_COUNT"
-
-DOC_COUNT=$(find docs -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
-echo -e "${GREEN}✓${NC} Documentos: $DOC_COUNT"
-
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-if [ $errors -eq 0 ]; then
-    echo -e "${GREEN}✅ Setup completado exitosamente!${NC}"
-    echo ""
-    echo "Próximos pasos:"
-    echo "  1. ./install.sh"
-    echo "  2. source venv/bin/activate"
-    echo "  3. gitlab-cicd init"
-    echo ""
-    echo "Para más información, lee:"
-    echo "  - QUICKSTART.md (inicio rápido)"
-    echo "  - NEXT_STEPS.md (próximos pasos)"
-    echo "  - docs/USAGE.md (guía completa)"
 else
-    echo -e "${RED}❌ Se encontraron $errors errores${NC}"
+    error "Python 3 no instalado"
     exit 1
 fi
 
-if [ $warnings -gt 0 ]; then
-    echo -e "${YELLOW}⚠️  $warnings advertencias (no críticas)${NC}"
+# 2. Verificar comando gitlab-cicd
+echo ""
+echo "2. Verificando comando gitlab-cicd..."
+if command -v gitlab-cicd &> /dev/null; then
+    success "Comando 'gitlab-cicd' disponible"
+    CLI_VERSION=$(gitlab-cicd --version 2>&1 || echo "unknown")
+    echo "   Versión: $CLI_VERSION"
+else
+    error "Comando 'gitlab-cicd' no encontrado"
+    echo ""
+    echo "   Solución:"
+    echo "   1. Ejecuta: ./install.sh"
+    echo "   2. Si ya instalaste, cierra y abre tu terminal"
+    echo "   3. Verifica que la ruta esté en PATH"
+    exit 1
 fi
 
+# 3. Verificar módulos Python
+echo ""
+echo "3. Verificando dependencias Python..."
+MODULES=("gitlab" "click" "jinja2" "rich" "keyring")
+MISSING_MODULES=()
+
+for module in "${MODULES[@]}"; do
+    if python3 -c "import $module" 2>/dev/null; then
+        success "$module instalado"
+    else
+        error "$module NO instalado"
+        MISSING_MODULES+=("$module")
+    fi
+done
+
+if [ ${#MISSING_MODULES[@]} -ne 0 ]; then
+    echo ""
+    error "Faltan módulos: ${MISSING_MODULES[*]}"
+    echo "   Ejecuta: pip install ${MISSING_MODULES[*]}"
+    exit 1
+fi
+
+# 4. Verificar keyring (para almacenamiento seguro)
+echo ""
+echo "4. Verificando almacenamiento seguro (keyring)..."
+if python3 -c "import keyring; keyring.get_keyring()" &>/dev/null; then
+    KEYRING_BACKEND=$(python3 -c "import keyring; print(keyring.get_keyring().__class__.__name__)")
+    success "Keyring disponible: $KEYRING_BACKEND"
+else
+    warning "Keyring no disponible (se usará fallback seguro)"
+    echo "   Opcional: Instala soporte para tu sistema"
+    
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        echo "   • Ubuntu/Debian: sudo apt install python3-dbus"
+        echo "   • Fedora/RHEL:   sudo dnf install python3-dbus"
+    fi
+fi
+
+# 5. Verificar estructura de directorios
+echo ""
+echo "5. Verificando estructura del proyecto..."
+REQUIRED_FILES=(
+    "src/gitlab_cicd_creator/__init__.py"
+    "src/gitlab_cicd_creator/cli.py"
+    "src/gitlab_cicd_creator/config.py"
+    "src/gitlab_cicd_creator/gitlab_client.py"
+    "src/gitlab_cicd_creator/exceptions.py"
+    "src/gitlab_cicd_creator/validators.py"
+    "src/gitlab_cicd_creator/services/variable_service.py"
+    "pyproject.toml"
+    "README.md"
+)
+
+for file in "${REQUIRED_FILES[@]}"; do
+    if [ -f "$file" ]; then
+        success "$file"
+    else
+        error "$file NO ENCONTRADO"
+    fi
+done
+
+# 6. Verificar configuración (si existe)
+echo ""
+echo "6. Verificando configuración..."
+CONFIG_DIR="$HOME/.gitlab-cicd-creator"
+if [ -d "$CONFIG_DIR" ]; then
+    success "Directorio de configuración existe: $CONFIG_DIR"
+    
+    if [ -f "$CONFIG_DIR/config.json" ]; then
+        success "config.json encontrado"
+        
+        # Verificar campos requeridos
+        if command -v jq &> /dev/null; then
+            GITLAB_URL=$(jq -r '.gitlab_url // empty' "$CONFIG_DIR/config.json" 2>/dev/null)
+            TEMPLATE_REPO=$(jq -r '.template_repo // empty' "$CONFIG_DIR/config.json" 2>/dev/null)
+            
+            if [ -n "$GITLAB_URL" ]; then
+                success "gitlab_url configurado: $GITLAB_URL"
+            else
+                warning "gitlab_url no configurado"
+            fi
+            
+            if [ -n "$TEMPLATE_REPO" ]; then
+                success "template_repo configurado: $TEMPLATE_REPO"
+            else
+                warning "template_repo no configurado"
+            fi
+        fi
+    else
+        warning "config.json no encontrado (ejecuta 'gitlab-cicd init')"
+    fi
+    
+    # Verificar token
+    TOKEN_EXISTS=false
+    if python3 -c "import keyring; keyring.get_password('gitlab-cicd-creator', 'gitlab_token')" &>/dev/null 2>&1; then
+        success "Token almacenado en keyring (seguro)"
+        TOKEN_EXISTS=true
+    elif [ -f "$CONFIG_DIR/.token" ]; then
+        success "Token en fallback file (permisos: $(stat -f '%Lp' "$CONFIG_DIR/.token" 2>/dev/null || stat -c '%a' "$CONFIG_DIR/.token" 2>/dev/null))"
+        TOKEN_EXISTS=true
+    else
+        warning "Token no configurado (ejecuta 'gitlab-cicd init')"
+    fi
+    
+    # Verificar logs
+    if [ -d "$CONFIG_DIR/logs" ]; then
+        LOG_COUNT=$(ls -1 "$CONFIG_DIR/logs"/*.log 2>/dev/null | wc -l)
+        if [ $LOG_COUNT -gt 0 ]; then
+            success "Logs: $LOG_COUNT archivo(s)"
+        fi
+    fi
+else
+    warning "Directorio de configuración no existe"
+    echo "   Primera vez: Ejecuta 'gitlab-cicd init'"
+fi
+
+# 7. Test de funcionalidad básica
+echo ""
+echo "7. Probando comandos básicos..."
+
+# Test --help
+if gitlab-cicd --help &>/dev/null; then
+    success "gitlab-cicd --help funciona"
+else
+    error "gitlab-cicd --help falla"
+fi
+
+# Test comandos disponibles
+COMMANDS=("init" "create" "status" "set-variable" "list-templates")
+for cmd in "${COMMANDS[@]}"; do
+    if gitlab-cicd $cmd --help &>/dev/null; then
+        success "gitlab-cicd $cmd disponible"
+    else
+        error "gitlab-cicd $cmd NO disponible"
+    fi
+done
+
+# 8. Verificar tests (si estamos en desarrollo)
+echo ""
+echo "8. Verificando entorno de desarrollo (opcional)..."
+if [ -d "tests" ]; then
+    success "Directorio tests/ encontrado"
+    
+    if command -v pytest &> /dev/null; then
+        success "pytest instalado"
+        
+        # Contar tests
+        TEST_COUNT=$(find tests -name "test_*.py" | wc -l)
+        success "$TEST_COUNT archivo(s) de test"
+    else
+        warning "pytest no instalado (solo necesario para desarrollo)"
+        echo "   Instala con: pip install -e \".[dev]\""
+    fi
+else
+    warning "tests/ no encontrado (normal si se instaló desde pip/pipx)"
+fi
+
+# 9. Resumen final
+echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  📋 Resumen de Verificación"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+ISSUES=false
+
+if ! command -v gitlab-cicd &> /dev/null; then
+    error "CLI no instalado correctamente"
+    ISSUES=true
+fi
+
+if [ ${#MISSING_MODULES[@]} -ne 0 ]; then
+    error "Faltan dependencias Python"
+    ISSUES=true
+fi
+
+if [ ! -d "$CONFIG_DIR" ] || [ ! -f "$CONFIG_DIR/config.json" ]; then
+    warning "Configuración pendiente (ejecuta 'gitlab-cicd init')"
+fi
+
+if [ "$ISSUES" = true ]; then
+    echo ""
+    error "Se encontraron problemas. Revisa los errores arriba."
+    echo ""
+    echo "Para reinstalar:"
+    echo "  ./uninstall.sh"
+    echo "  ./install.sh"
+    exit 1
+else
+    echo ""
+    success "¡Verificación completada!"
+    echo ""
+    echo "Próximos pasos:"
+    echo "  1️⃣  gitlab-cicd init         # Configurar credenciales (si no lo has hecho)"
+    echo "  2️⃣  gitlab-cicd --help       # Ver todos los comandos"
+    echo "  3️⃣  gitlab-cicd create --help # Ver opciones de creación"
+    echo ""
+    echo "Documentación completa: README.md"
+    echo ""
+fi

@@ -1,55 +1,99 @@
 # GitLab CI/CD Creator
 
-Un CLI potente y flexible para generar automáticamente configuraciones de CI/CD en repositorios de GitLab para despliegues en Kubernetes.
+> CLI profesional para automatizar la creación de pipelines CI/CD en GitLab con despliegues en Kubernetes
 
-## � Tabla de Contenidos
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-- [Características](#-características)
+## 🚀 Características Principales
+
+### Automatización Inteligente
+- ✅ **Cero Configuración Manual**: Genera pipelines completos con una sola línea
+- ✅ **Detección Automática de Runners**: Obtiene runners disponibles desde GitLab API
+- ✅ **Descubrimiento de Clusters K8s**: Encuentra GitLab Kubernetes Agents en grupos padres
+- ✅ **Plantillas Jinja2**: Sistema flexible desde repositorios remotos de GitLab
+- ✅ **Validación Robusta**: Valida inputs antes de comunicarse con GitLab
+
+### Seguridad y Confiabilidad
+- 🔒 **Almacenamiento Seguro**: Tokens en keyring del sistema (macOS/Linux/Windows)
+- 🔒 **Variables Protegidas**: Soporte para variables enmascaradas y protegidas
+- 📝 **Logging Estructurado**: Logs rotatorios con niveles configurables
+- ⚠️ **Manejo de Errores**: Excepciones específicas con contexto completo
+
+### Arquitectura Limpia
+- 🏗️ **Capa de Servicios**: Separación de responsabilidades (VariableService, RunnerService, K8sConfigService)
+- 🧪 **Alta Cobertura de Tests**: Suite completa con pytest
+- 📦 **Código Modular**: Validadores, excepciones y utilidades separadas
+- 📖 **Documentación Completa**: Guías de uso y desarrollo
+
+---
+
+## 📋 Tabla de Contenidos
+
 - [Requisitos](#-requisitos)
 - [Instalación](#-instalación)
-- [Uso Rápido](#-uso-rápido)
-- [Comandos Disponibles](#-comandos-disponibles)
+- [Inicio Rápido](#-inicio-rápido)
+- [Comandos](#-comandos)
+- [Configuración de GitLab](#%EF%B8%8F-configuración-de-gitlab)
+- [Arquitectura del Proyecto](#-arquitectura-del-proyecto)
 - [Repositorio de Plantillas](#-repositorio-de-plantillas)
-- [Variables en Plantillas](#-variables-en-plantillas)- [Ejemplos Completos](#-ejemplos-completos)- [Configuración de GitLab](#-configuración-de-gitlab)
+- [Variables y Seguridad](#-variables-y-seguridad)
 - [Desarrollo](#-desarrollo)
 - [Contribuir](#-contribuir)
 
-## �🚀 Características
-
-- **Automatización Completa**: Genera pipelines CI/CD listos para producción
-- **Kubernetes Native**: Configuraciones optimizadas para clusters K8s con GitLab Agents
-- **Plantillas Personalizables**: Usa plantillas Jinja2 desde repositorios de GitLab
-- **Remote Includes**: Bloques reutilizables centralizados (sin duplicación)
-- **Variables CI/CD**: Gestión automática de variables de entorno y secretos
-- **Múltiples Ambientes**: Soporte para dev, staging y producción con KUBE_CONTEXT por entorno
-- **Detección de Clusters**: Integración automática con GitLab Agents para Kubernetes
-- **Organización por Tipos**: Pipeline, K8s, Helm, Config e Includes
-- **Integración GitLab**: Comunicación directa con la API de GitLab
+---
 
 ## 📋 Requisitos
 
-- Python 3.8 o superior
-- Cuenta de GitLab con token de acceso personal (permisos: `api`, `read_repository`, `write_repository`)
-- **Repositorio central de plantillas en GitLab** (obligatorio)
-- GitLab Agents configurados para acceso a clusters de Kubernetes
+### Sistema
+- **Python 3.8+** (requerido)
+- **Git** (recomendado)
+
+### GitLab
+- Instancia de GitLab (Cloud o self-hosted)
+- **Token de Acceso Personal** con permisos:
+  - `api` - Acceso completo a la API
+  - `read_repository` - Leer repositorios
+  - `write_repository` - Escribir en repositorios
+- **Repositorio de plantillas** configurado en GitLab (obligatorio)
+- **GitLab Kubernetes Agents** configurados (opcional, pero recomendado)
+
+---
 
 ## 🔧 Instalación
 
+### Instalación Automática (Recomendada)
+
 ```bash
-# 1. Clonar el repositorio
+# Clonar repositorio
 git clone https://github.com/ikerztipot/gitlab-repo-cicd-creator-cli.git
 cd gitlab-repo-cicd-creator-cli
 
-# 2. Ejecutar el instalador
+# Ejecutar instalador
 ./install.sh
 ```
 
-El instalador:
-- ✅ Detecta tu sistema operativo
-- ✅ Instala las dependencias necesarias
-- ✅ Hace que `gitlab-cicd` esté disponible globalmente
+El instalador detecta automáticamente:
+- ✓ Python y versión requerida
+- ✓ Instala con `pipx` (aislado) o `pip` (usuario)
+- ✓ Configura PATH si es necesario
+- ✓ Verifica dependencias del sistema (keyring)
 
 **Nota:** Cierra y abre tu terminal después de la instalación.
+
+### Instalación Manual
+
+```bash
+# Con pipx (aislado, recomendado)
+pipx install .
+
+# Con pip (usuario)
+pip install --user .
+
+# Verificar instalación
+gitlab-cicd --version
+```
 
 ### Desinstalación
 
@@ -57,522 +101,412 @@ El instalador:
 ./uninstall.sh
 ```
 
-## 🎯 Uso Rápido
+Elimina el CLI y opcionalmente la configuración en `~/.gitlab-cicd-creator/`.
 
-### 1. Inicializar configuración
+---
+
+## ⚡ Inicio Rápido
+
+### 1. Configurar Credenciales
 
 ```bash
 gitlab-cicd init
 ```
 
-El CLI te pedirá:
-- URL de GitLab (ej: `https://gitlab.workoholics.es`)
-- Token de acceso personal
-- **Ruta del repositorio de plantillas** (ej: `clients/infrastructure`)
+El CLI solicitará:
+- **URL de GitLab**: `https://gitlab.workoholics.es`
+- **Token**: `glpat-xxxxxxxxxxxx` (almacenado de forma segura en keyring)
+- **Repositorio de plantillas**: `clients/internal-infrastructure/cicd-templates`
 
-### 2. Crear CI/CD para un proyecto
+**Almacenamiento:**
+- Config: `~/.gitlab-cicd-creator/config.json` (sin token)
+- Token: Keyring del sistema (seguro) o fallback `~/.gitlab-cicd-creator/.token` (permisos 0o600)
+- Logs: `~/.gitlab-cicd-creator/logs/` (rotación 10MB, 5 archivos)
+
+### 2. Crear CI/CD para un Proyecto
 
 ```bash
-gitlab-cicd create clients/acme/mi-app \
-  --namespace production \
-  --environments pre,prod \
+gitlab-cicd create clients/acme/mi-app \\
+  --namespace production \\
+  --environments pre,prod \\
   --create-project
 ```
 
-El CLI:
-1. Detecta automáticamente los clusters disponibles (GitLab Agents)
-2. Carga las plantillas desde el repositorio
-3. **Obtiene runners disponibles de GitLab** (tags de runners activos)
-4. Solicita configuración interactiva:
-   - Componentes a desplegar (web, cms, api, etc.)
-   - **Selección de runner tags** (desde lista de runners disponibles)
-   - Prefijo para tags de release (wkhs, acme, etc.)
-   - Cluster para cada entorno
-5. Solicita valores para variables personalizadas
-6. Genera y commit los archivos al proyecto
+**El CLI ejecutará automáticamente:**
 
-### 3. Listar plantillas disponibles
+1. **Conexión**
+   - Valida credenciales con GitLab
+   - Crea proyecto si no existe
+
+2. **Descubrimiento**
+   - Busca Kubernetes Agents en grupos padres
+   - Obtiene runners disponibles (instancia + grupo + proyecto)
+
+3. **Configuración Interactiva**
+   - Componentes (ej: `web`, `api`, `cms`)
+   - Docker (Dockerfiles y puertos)
+   - Runner (desde lista con tags)
+   - Perfiles K8s (xsmall → xlarge)
+   - Clusters por entorno
+
+4. **Generación**
+   - Procesa plantillas Jinja2
+   - Genera manifiestos K8s
+   - Commitea archivos
+   - Configura variables CI/CD
+
+### 3. Verificar
 
 ```bash
-gitlab-cicd list-templates
-```
-
-### 4. Ver estado del CI/CD
-
-```bash
+# Ver estado
 gitlab-cicd status clients/acme/mi-app
+
+# Listar plantillas
+gitlab-cicd list-templates
+
+# Añadir variable
+gitlab-cicd set-variable clients/acme/mi-app API_KEY "secreto" --masked --protected
 ```
 
-### 5. Configurar variables CI/CD
+---
 
-```bash
-gitlab-cicd set-variable clients/acme/mi-app API_KEY "valor-secreto" --masked --protected
-```
+## 📚 Comandos
 
-## 📚 Comandos Disponibles
-
-### `init` - Inicializar configuración
+### `init` - Configuración Inicial
 
 ```bash
 gitlab-cicd init
 ```
 
-Configura el CLI con URL de GitLab, token y repositorio de plantillas.
+Configura URL, token (almacenado en keyring) y repositorio de plantillas.
 
-### `create` - Crear CI/CD para un proyecto
+**Keyring por plataforma:**
+- **macOS**: Keychain
+- **Linux**: Secret Service (GNOME Keyring/KWallet)
+- **Windows**: Windows Credential Manager
+- **Fallback**: `~/.gitlab-cicd-creator/.token` (permisos 0o600)
+
+---
+
+### `create` - Crear CI/CD
 
 ```bash
-gitlab-cicd create PROJECT_PATH [OPTIONS]
+gitlab-cicd create PROJECT_PATH --namespace NAMESPACE [OPTIONS]
 ```
 
 **Argumentos:**
-- `PROJECT_PATH`: Ruta del proyecto en GitLab (ej: `clients/acme/mi-app`)
+- `PROJECT_PATH`: Ruta GitLab (ej: `clients/acme/app`)
 
 **Opciones:**
-- `--namespace`: Namespace de Kubernetes (requerido)
-- `--environments`: Entornos separados por coma (default: `dev,pre,pro`)
-- `--create-project`: Crear el proyecto si no existe
+- `--namespace TEXT` *(requerido)*: Namespace K8s (RFC 1123)
+- `--environments TEXT`: Entornos (default: `dev,pre,prod`)
+- `--create-project`: Crear proyecto si no existe
+
+**Validaciones automáticas:**
+- Namespace: RFC 1123 (lowercase, max 63 chars)
+- Project path: Formato `grupo/proyecto`
+- Puertos: Rango 1-65535
+- Variables: Formato `A-Z`, `0-9`, `_`
 
 **Ejemplo:**
 ```bash
-gitlab-cicd create clients/workoholics/web-app \
-  --namespace workoholics-web \
-  --environments pre,prod \
+gitlab-cicd create clients/workoholics/backend \\
+  --namespace wkhs-api \\
+  --environments staging,production \\
   --create-project
 ```
 
-### `status` - Ver estado del CI/CD
+**Flujo de ejecución:**
+```
+→ Configurando CI/CD
+
+Descubriendo recursos GitLab...
+✓ 5 runner(s) disponible(s)
+✓ 4 cluster(s) encontrado(s):
+  1. clients/infrastructure:k3s-slots-caprabo
+  2. clients/infrastructure:scaleway-worko-pre
+  3. clients/infrastructure:scaleway-worko-prod
+  4. clients/infrastructure:scaleway-basquetour
+
+Componentes: api,worker
+¿Usa Docker? [y/n]: y
+Dockerfile 'api': 
+Puerto 'api' (80): 8000
+  ✓ api: Dockerfile (puerto 8000)
+
+Selecciona runner (1-5): 2
+✓ Runner: gcp-docker (tags: docker, gcp)
+
+Cluster para staging (1-4) o Enter: 2
+Cluster para production (1-4) o Enter: 3
+
+Variables para 'api':
+Nombre: DATABASE_URL
+¿Es secret? [y/n]: y
+  🔒 DATABASE_URL → Secret
+
+Generando archivos...
+✓ .gitlab-ci.yml
+✓ k8s/api/01-namespace.yaml
+✓ k8s/api/02-secrets.yaml
+✓ k8s/api/04-deployment.yaml
+
+✅ CI/CD configurado exitosamente
+```
+
+---
+
+### `status` - Estado del Proyecto
 
 ```bash
 gitlab-cicd status PROJECT_PATH
 ```
 
-### `set-variable` - Configurar variable CI/CD
+Muestra:
+- Estado del repositorio
+- Último pipeline
+- Variables CI/CD
+- Clusters por entorno
+
+---
+
+### `set-variable` - Configurar Variable CI/CD
 
 ```bash
 gitlab-cicd set-variable PROJECT_PATH KEY VALUE [OPTIONS]
 ```
 
 **Opciones:**
-- `--protected`: Variable solo disponible en ramas protegidas
-- `--masked`: Enmascarar valor en logs
+- `--protected`: Solo en branches/tags protegidos
+- `--masked`: Ocultar en logs
+- `--environment-scope`: Limitar a entorno
 
-**Ejemplo:**
+**Ejemplos:**
 ```bash
-gitlab-cicd set-variable clients/acme/app DB_PASSWORD "secreto" --masked --protected
+# Variable simple
+gitlab-cicd set-variable clients/acme/app API_URL "https://api.acme.com"
+
+# Secret protegido
+gitlab-cicd set-variable clients/acme/app DB_PASS "secret" --masked --protected
+
+# Por entorno
+gitlab-cicd set-variable clients/acme/app REPLICAS "3" --environment-scope production
 ```
 
-### `list-templates` - Listar plantillas
+---
+
+### `list-templates` - Listar Plantillas
 
 ```bash
 gitlab-cicd list-templates
 ```
 
-Muestra todas las plantillas disponibles en el repositorio configurado.
+Muestra plantillas disponibles del repositorio configurado, organizadas por tipo (Pipeline, K8s, Helm, Config).
 
-## � Repositorio de Plantillas
+---
+
+## ⚙️ Configuración de GitLab
+
+### 1. Token de Acceso Personal
+
+1. GitLab → **Preferences → Access Tokens**
+2. Crear token con permisos:
+   - ✅ `api`
+   - ✅ `read_repository`
+   - ✅ `write_repository`
+3. Copiar token (`glpat-xxxxxxxxxxxx`)
+4. Usar en `gitlab-cicd init`
+
+### 2. GitLab Kubernetes Agents
+
+**Ubicación:** Grupos padres o proyecto de infraestructura
+
+**Configuración en GitLab UI:**
+```
+Operate → Kubernetes clusters → Connect a cluster (agent)
+```
+
+**Nombres sugeridos:**
+- `scaleway-internal-worko-prod`
+- `k3s-slots-caprabo`
+- `gke-production-us`
+
+**Búsqueda automática del CLI:**
+1. Proyecto del repositorio de plantillas
+2. Grupos padres del repositorio de plantillas  
+3. Grupos padres del proyecto destino
+
+**Formato generado:** `<project_path>:<agent_name>`
+
+**Ejemplo:** `clients/infrastructure:scaleway-worko-prod`
+
+### 3. Runners de GitLab
+
+El CLI descubre automáticamente:
+1. **Runners de instancia** (si eres admin)
+2. **Runners del grupo**
+3. **Runners del proyecto**
+
+**Selección interactiva:**
+```
+Runners disponibles:
+  1. ● gcp-ci-cd-gitlab-runner-docker
+     docker, gcp
+  2. ● Runner autoescalado cluster
+     buildkit, scaleway, worko-internal
+
+Selecciona (1-2): 2
+✓ Tags: buildkit, scaleway, worko-internal
+```
+
+---
+
+## 🏗 Arquitectura del Proyecto
+
+### Estructura de Directorios
+
+```
+gitlab-repo-cicd-creator-cli/
+├── src/gitlab_cicd_creator/
+│   ├── cli.py                      # CLI principal (orquestación)
+│   ├── config.py                   # Config con keyring
+│   ├── exceptions.py               # Excepciones personalizadas
+│   ├── validators.py               # Validadores de input
+│   ├── logging_config.py           # Logging estructurado
+│   ├── gitlab_client.py            # Cliente GitLab API
+│   ├── template_manager.py         # Carga de plantillas
+│   ├── k8s_generator.py            # Procesamiento Jinja2
+│   └── services/
+│       ├── variable_service.py     # Gestión de variables
+│       ├── runner_service.py       # Descubrimiento runners
+│       └── k8s_config_service.py   # Configuración K8s
+│
+├── tests/                          # Suite pytest
+│   ├── test_cli.py
+│   ├── test_config.py
+│   ├── test_gitlab_client.py
+│   ├── test_k8s_generator.py
+│   └── test_template_manager.py
+│
+├── docs/                           # Documentación
+│   ├── CONTRIBUTING.md
+│   ├── TEMPLATE_EXAMPLE.md
+│   └── VARIABLES.md
+│
+├── install.sh                      # Instalador
+├── uninstall.sh                    # Desinstalador
+├── pyproject.toml                  # Configuración proyecto
+└── Makefile                        # Tareas (test, lint, format)
+```
+
+### Capas de Abstracción
+
+#### 1. CLI Layer (`cli.py`)
+- Interfaz Click
+- Orquestación de flujo
+- Manejo de errores
+
+#### 2. Service Layer (`services/`)
+- **VariableService**: Variables (template + CI/CD + CICD_*)
+- **RunnerService**: Runners y tags
+- **K8sConfigService**: Recursos K8s (perfiles, manifiestos, PVCs)
+
+#### 3. Client Layer (`gitlab_client.py`)
+- Wrapper `python-gitlab`
+- CRUD en GitLab
+- Runners multi-nivel
+- Variables protegidas/enmascaradas
+
+#### 4. Processing Layer (`k8s_generator.py`, `template_manager.py`)
+- Carga plantillas (recursivo)
+- Procesamiento Jinja2
+- Preservación `CICD_*`
+
+#### 5. Validation Layer (`validators.py`)
+- K8s namespace (RFC 1123)
+- Project path
+- Puertos, storage, variables
+- Sanitización paths
+
+#### 6. Exception Layer (`exceptions.py`)
+- Excepciones context-aware
+- Jerarquía personalizada
+
+### Excepciones Personalizadas
+
+```
+GitLabCICDError                 # Base
+├── ConfigurationError          # Error config.json
+├── ValidationError             # Input inválido
+├── GitLabAPIError              # Error API GitLab
+├── TemplateError               # Error plantillas
+├── ProjectNotFoundError        # Proyecto no existe
+└── VariableRequiredError       # Variable faltante
+```
+
+### Validadores Disponibles
+
+```python
+from gitlab_cicd_creator.validators import (
+    validate_k8s_namespace,      # RFC 1123
+    validate_project_path,        # namespace/project
+    validate_port,                # 1-65535
+    validate_storage_size,        # 1Gi, 10Gi
+    validate_variable_name,       # A-Z, 0-9, _
+    sanitize_file_path,           # Path traversal
+)
+```
+
+---
+
+## 📦 Repositorio de Plantillas
 
 ### Estructura Requerida
 
-El repositorio de plantillas debe seguir esta organización:
-
 ```
-clients/infrastructure/          # Tu repositorio de plantillas
-├── pipeline/                    # Plantillas de CI/CD (procesadas con Jinja2)
-│   ├── .gitlab-ci.yml.j2       # Pipeline principal
-│   └── build-stage.yml.j2      # Stages adicionales (opcional)
+clients/internal-infrastructure/cicd-templates/
 │
-├── includes/                    # Bloques reutilizables (NO procesados, incluidos remotamente)
-│   ├── .build-buildkit-scaleway.yml
+├── pipeline/                    # CI/CD (procesados Jinja2)
+│   └── .gitlab-ci.yml.j2
+│
+├── includes/                    # Reutilizables (NO procesados)
+│   ├── .build-buildkit.yml
 │   ├── .deploy-k8s.yml
 │   └── .test-python.yml
 │
-├── k8s/                         # Manifiestos de Kubernetes
-│   ├── deployment.yaml.j2
-│   ├── service.yaml.j2
-│   └── ingress.yaml.j2
+├── k8s/                         # Manifiestos K8s (procesados)
+│   ├── 01-namespace.yaml.j2
+│   ├── 02-secrets.yaml.j2
+│   ├── 03-configs.yaml.j2
+│   ├── 04-deployment.yaml.j2
+│   ├── 05-ingress.yaml.j2
+│   ├── 06-service.yaml.j2
+│   └── 07-pvc.yaml.j2
 │
-├── helm/                        # Charts de Helm (opcional)
-│   └── values.yaml.j2
-│
-└── config/                      # Configuraciones (opcional)
-    └── env.j2
+└── helm/                        # Charts Helm (opcional)
+    └── values.yaml.j2
 ```
 
 ### Tipos de Archivos
 
-| Carpeta | Extensión | Procesado | Destino | Uso |
-|---------|-----------|-----------|---------|-----|
-| `pipeline/` | `.j2` | ✅ Sí | Raíz proyecto | Archivos CI/CD procesados con variables |
-| `includes/` | `.yml` | ❌ No | No se copian | Bloques incluidos remotamente |
-| `k8s/` | `.j2` | ✅ Sí | `k8s/` | Manifiestos Kubernetes |
-| `helm/` | `.j2` | ✅ Sí | `helm/` | Charts Helm |
-| `config/` | `.j2` | ✅ Sí | `config/` | Configuraciones |
+| Carpeta | Extensión | Procesado | Destino |
+|---------|-----------|-----------|---------|
+| `pipeline/` | `.j2` | ✅ Sí | Raíz proyecto |
+| `includes/` | `.yml` | ❌ No | Remote include |
+| `k8s/` | `.j2` | ✅ Sí | `k8s/<component>/` |
+| `helm/` | `.j2` | ✅ Sí | `helm/` |
 
-### Ejemplo de Plantilla Principal
+### Ejemplo Plantilla Principal
 
-**`pipeline/.gitlab-ci.yml.j2`**:
+**`pipeline/.gitlab-ci.yml.j2`:**
 ```yaml
-# GitLab CI/CD para {{ project_name }}
+# CI/CD para {{ project_name }}
 
-# Incluir bloques reutilizables desde el repositorio de plantillas
 include:
   - project: '{{ template_repo }}'
     ref: main
     file: 
-      - '/includes/.build-buildkit-scaleway.yml'
-      - '/includes/.deploy-k8s.yml'
-
-stages:
-  - build
-  - deploy
-
-variables:
-  PROJECT_PATH: {{ project_path }}
-  NAMESPACE: {{ namespace }}
-
-build:
-  extends: .build-buildkit  # Definido en includes/.build-buildkit-scaleway.yml
-  only:
-    - main
-
-# Deploy por cada entorno
-{% for env in environments %}
-deploy:{{ env }}:
-  extends: .deploy-k8s  # Definido en includes/.deploy-k8s.yml
-  variables:
-    KUBE_CONTEXT: $KUBE_CONTEXT
-  environment:
-    name: {{ env }}
-  only:
-    - main
-{% endfor %}
-```
-
-### Ejemplo de Remote Include
-
-**`includes/.build-buildkit-scaleway.yml`** (sin extensión `.j2`):
-```yaml
-# @requires: PACKAGE_NAME, DOCKERFILE_PATH
-
-.build-buildkit:
-  stage: build
-  image:
-    name: moby/buildkit:latest
-    entrypoint: [""]
-  script:
-    - buildctl build --frontend dockerfile.v0 \
-        --local context=. \
-        --output type=image,name=$DOCKER_REGISTRY/$PROJECT_PATH:$CI_COMMIT_SHORT_SHA,push=true
-  tags:
-    - scaleway
-```
-
-**Ventajas de Remote Includes:**
-- ✅ Mantenimiento centralizado
-- ✅ Sin duplicación de código
-- ✅ Actualiza una vez, afecta todos los proyectos
-- ✅ Versionado con tags/branches
-
-**Detección Automática de Variables:**
-
-El CLI analiza automáticamente los archivos de remote includes para detectar variables requeridas mediante el comentario especial `# @requires:`.
-
-Cuando se encuentra este comentario, el CLI:
-1. Descarga el archivo desde el repositorio de plantillas
-2. Extrae las variables listadas después de `@requires:`
-3. Las solicita al usuario durante la creación del pipeline
-4. Las configura automáticamente como variables CI/CD en GitLab
-
-## 🔑 Variables en Plantillas
-
-El CLI maneja dos tipos de variables:
-
-### 1. Variables de Plantilla (sustituidas directamente)
-
-Estas variables se procesan y sustituyen en los archivos generados:
-
-| Variable | Descripción | Ejemplo |
-|----------|-------------|---------|
-| `project_name` | Nombre del proyecto | `mi-app` |
-| `project_path` | Ruta completa del proyecto | `clients/acme/mi-app` |
-| `namespace` | Namespace de Kubernetes | `production` |
-| `environments` | Lista de entornos | `['pre', 'prod']` |
-| `template_repo` | Repositorio de plantillas | `clients/infrastructure` |
-
-**Uso en plantillas:**
-```yaml
-metadata:
-  name: {{ project_name }}
-  namespace: {{ namespace }}
-
-include:
-  - project: '{{ template_repo }}'
-    file: '/includes/.build.yml'
-
-{% for env in environments %}
-deploy:{{ env }}:
-  environment:
-    name: {{ env }}
-{% endfor %}
-```
-
-**Uso condicional de Docker:**
-```yaml
-{% for component in components %}
-build-{{ component }}:
-  stage: build
-  variables:
-    PACKAGE_NAME: {{ component }}
-{%- if use_docker %}
-    DOCKERFILE_PATH: {{ dockerfile_paths[component] }}
-{%- endif %}
-  script:
-{%- if use_docker %}
-    - docker build -f $DOCKERFILE_PATH -t $IMAGE_NAME .
-{%- else %}
-    - npm run build  # o cualquier otro método de build
-{%- endif %}
-{% endfor %}
-```
-
-### 2. Variables CI/CD (guardadas en GitLab)
-
-Variables que empiezan con `CICD_` se guardan como variables CI/CD en GitLab y **NO** se sustituyen en los archivos.
-
-**En la plantilla:**
-```yaml
-build:
-  script:
-    - docker login -u $CI_REGISTRY_USER -p $CICD_REGISTRY_TOKEN
-    - curl -H "Authorization: Bearer $CICD_API_KEY" $CICD_API_URL
-```
-
-**Durante la ejecución**, el CLI:
-1. Detecta automáticamente las variables `CICD_*`
-2. Solicita sus valores al usuario
-3. Las guarda como variables CI/CD en GitLab
-4. Opcionalmente las marca como protegidas/enmascaradas
-5. Las mantiene como `$CICD_*` en los archivos generados (NO las sustituye)
-
-**Ejemplo interactivo:**
-```bash
-Valores para variables CI/CD:
-CICD_REGISTRY_TOKEN: ghp_xxxxxxxxxxxx
-  ¿Marcar CICD_REGISTRY_TOKEN como protegida? [y/N]: y
-  ¿Marcar CICD_REGISTRY_TOKEN como enmascarada? [Y/n]: y
-
-CICD_API_KEY: sk_live_xxxxx
-  ¿Marcar CICD_API_KEY como protegida? [y/N]: y
-  ¿Marcar CICD_API_KEY como enmascarada? [Y/n]: y
-```
-
-### Variables Automáticas Proporcionadas por el CLI
-
-El CLI inyecta automáticamente estas variables en todas las plantillas sin solicitar al usuario:
-
-| Variable | Descripción | Ejemplo | Origen |
-|----------|-------------|---------|--------|
-| `project_name` | Nombre del proyecto GitLab | `web-app` | Extraído del último segmento de `project_path` |
-| `project_path` | Ruta completa del proyecto | `clients/workoholics/web-app` | Argumento del comando `create` |
-| `namespace` | Namespace de Kubernetes | `wkhs` | Opción `--namespace` |
-| `environments` | Lista de entornos | `['pre', 'prod']` | Opción `--environments` |
-| `template_repo` | Repositorio de plantillas | `clients/infrastructure` | Configuración almacenada en `config.json` |
-| `components` | Componentes a desplegar | `['web', 'cms']` | Prompt interactivo |
-| `runner_tags` | Tags de runners GitLab | `['buildkit', 'scaleway']` | Selección interactiva desde GitLab API |
-| `tag_prefix` | Prefijo para tags de releases | `wkhs` | Prompt interactivo con smart default |
-| `use_docker` | Si el proyecto usa Docker | `True` / `False` | Prompt interactivo |
-| `dockerfile_paths` | Ruta del Dockerfile por componente | `{'web': 'Dockerfile', 'cms': 'cms/Dockerfile'}` | Prompt interactivo por cada componente |
-
-### Buenas Prácticas
-
-**Variables de Plantilla - Usar para:**
-- ✅ Nombres de proyecto, namespace, ambiente
-- ✅ Configuraciones de estructura (réplicas, puertos)
-- ✅ Referencias a recursos (nombres de deployments, services)
-- ✅ Valores que no cambian después del setup inicial
-
-**Variables CI/CD - Usar para:**
-- ✅ Credenciales (tokens, passwords, API keys)
-- ✅ URLs de servicios externos
-- ✅ Configuraciones que pueden cambiar sin modificar archivos
-- ✅ Secretos y datos sensibles
-- ✅ Referencias a clusters, contextos, registros
-
-**Protección de Variables:**
-- **Protegidas:** Solo disponibles en ramas/tags protegidos (recomendado para producción)
-- **Enmascaradas:** Su valor se oculta en los logs (recomendado para todos los secretos)
-
-## 📖 Ejemplos Completos
-
-### Ejemplo 1: Sesión Interactiva Completa
-
-Este ejemplo muestra una sesión completa de uso del CLI con todas las interacciones.
-
-#### Comando Inicial
-
-```bash
-gitlab-cicd create clients/workoholics/web-app \
-  --namespace wkhs \
-  --environments pre,prod \
-  --create-project
-```
-
-#### Salida del CLI
-
-```
-╭────────────────────────────────────────╮
-│ Creando CI/CD para clients/workoholics/web-app │
-╰────────────────────────────────────────╯
-
-✓ Conectado a GitLab
-✓ Proyecto listo: https://gitlab.workoholics.es/clients/workoholics/web-app
-
-Obteniendo clusters disponibles...
-  ✓ clients/internal-infrastructure/cicd-templates:scaleway-internal-worko-pre
-  ✓ clients/internal-infrastructure/cicd-templates:scaleway-internal-worko-prod
-
-Cargando plantillas desde: clients/internal-infrastructure/cicd-templates
-✓ Plantillas cargadas: 8 archivos
-
-Analizando variables de las plantillas...
-  • Variables de plantilla: project_name, project_path, namespace, environments, components, runner_tags, tag_prefix
-  • Variables CI/CD (se guardarán en GitLab): CICD_DOCKER_REGISTRY, CICD_REGISTRY_USER, CICD_REGISTRY_PASSWORD
-
-Obteniendo runners disponibles...
-✓ Encontrados 5 runners con 8 tags
-
-Configuración del Pipeline
-
-Componentes a desplegar (separados por coma) [web]: web,cms
-
-¿El proyecto utiliza Docker para construir las imágenes? [Y/n]: y
-
-Configuración de Dockerfile por componente:
-
-Componente: web
-Ruta del Dockerfile para 'web' [Dockerfile]: Dockerfile
-  ✓ web: Dockerfile
-
-Componente: cms
-Ruta del Dockerfile para 'cms' [cms/Dockerfile]: cms/Dockerfile
-  ✓ cms: cms/Dockerfile
-
-Runners disponibles:
-  1. Runner #97 - Scaleway BuildKit
-     Tags: buildkit, scaleway, worko-internal
-  2. Runner #85 - Docker Production
-     Tags: docker, production
-  3. Runner #72 - Kubernetes Staging
-     Tags: kubernetes, staging
-
-Selecciona un runner (número) [1]: 1
-✓ Runner seleccionado: Runner #97
-✓ Tags del runner: buildkit, scaleway, worko-internal
-
-Prefijo para tags de release (ej: wkhs, acme) [web]: wkhs
-
-Configuración de KUBE_CONTEXT por entorno:
-
-Entorno: pre
-Clusters disponibles:
-  1. clients/internal-infrastructure/cicd-templates:scaleway-internal-worko-pre
-  2. clients/internal-infrastructure/cicd-templates:scaleway-internal-worko-prod
-Selecciona el cluster para pre (número o ingresa manualmente) [1]: 1
-✓ KUBE_CONTEXT para pre: clients/internal-infrastructure/cicd-templates:scaleway-internal-worko-pre
-
-Entorno: prod
-Clusters disponibles:
-  1. clients/internal-infrastructure/cicd-templates:scaleway-internal-worko-pre
-  2. clients/internal-infrastructure/cicd-templates:scaleway-internal-worko-prod
-Selecciona el cluster para prod (número o ingresa manualmente) [2]: 2
-✓ KUBE_CONTEXT para prod: clients/internal-infrastructure/cicd-templates:scaleway-internal-worko-prod
-
-Analizando includes remotos...
-  ✓ Analizado: includes/.build-buildkit-scaleway.yml
-  • Variables en includes remotos: PACKAGE_NAME, DOCKERFILE_PATH
-
-Información requerida para las plantillas:
-(No hay variables adicionales requeridas)
-
-Valores para variables CI/CD:
-Estas variables se guardarán en la configuración de GitLab
-
-CICD_DOCKER_REGISTRY: registry.workoholics.es
-  ¿Marcar CICD_DOCKER_REGISTRY como protegida? [y/N]: n
-  ¿Marcar CICD_DOCKER_REGISTRY como enmascarada? [y/N]: n
-
-CICD_REGISTRY_USER: ci-deployer
-  ¿Marcar CICD_REGISTRY_USER como protegida? [y/N]: y
-  ¿Marcar CICD_REGISTRY_USER como enmascarada? [y/N]: n
-
-CICD_REGISTRY_PASSWORD: ••••••••
-  ¿Marcar CICD_REGISTRY_PASSWORD como protegida? [y/N]: y
-  ¿Marcar CICD_REGISTRY_PASSWORD como enmascarada? [y/N]: y
-
-Generando archivos del CI/CD...
-✓ Procesadas 1 plantillas de pipeline
-✓ Procesadas 8 plantillas de Kubernetes
-✓ Procesadas 0 plantillas de Helm
-✓ Procesadas 0 configuraciones adicionales
-
-Commiteando archivos al repositorio...
-✓ .gitlab-ci.yml
-✓ k8s/web/02-secrets.yaml
-✓ k8s/web/03-configs.yaml
-✓ k8s/web/04-deployment.yaml
-✓ k8s/web/05-ingress.yaml
-✓ k8s/cms/02-secrets.yaml
-✓ k8s/cms/03-configs.yaml
-✓ k8s/cms/04-deployment.yaml
-✓ k8s/cms/05-ingress.yaml
-
-Configurando variables CI/CD en GitLab...
-✓ Variable CICD_DOCKER_REGISTRY configurada
-✓ Variable CICD_REGISTRY_USER configurada (protegida)
-✓ Variable CICD_REGISTRY_PASSWORD configurada (protegida, enmascarada)
-
-Configurando variables KUBE_CONTEXT por entorno...
-✓ Variable KUBE_CONTEXT configurada para entorno: pre
-✓ Variable KUBE_CONTEXT configurada para entorno: prod
-
-╭───────────────────────────────────────╮
-│ ✅ CI/CD configurado exitosamente     │
-╰───────────────────────────────────────╯
-
-Pipeline generado con:
-  • 2 componentes: web, cms
-  • 2 ambientes: pre, prod
-  • 6 stages: build-web, deploy-web-pre, deploy-web-prod, build-cms, deploy-cms-pre, deploy-cms-prod
-  • 3 runner tags: buildkit, scaleway, worko-internal
-
-Ver pipeline en:
-  https://gitlab.workoholics.es/clients/workoholics/web-app/-/pipelines
-
-Próximos pasos:
-  1️⃣  Revisa los archivos generados en el repositorio
-  2️⃣  Crea un tag para activar el pipeline:
-      git tag wkhs-web-v1.0.0 && git push --tags
-      git tag wkhs-cms-v1.0.0 && git push --tags
-  3️⃣  Verifica el estado del pipeline con:
-      gitlab-cicd status clients/workoholics/web-app
-```
-
-### Ejemplo 2: Plantilla Completa con Variables y Remote Includes
-
-#### Plantilla: `pipeline/.gitlab-ci.yml.j2`
-
-```yaml
-# GitLab CI/CD para {{ project_name }}
-# Generado con gitlab-cicd-creator
-# Repositorio: {{ project_path }}
-
-# Incluir bloques reutilizables desde el repositorio de plantillas
-include:
-  - project: '{{ template_repo }}'
-    ref: main
-    file: 
-      - '/includes/.build-buildkit-scaleway.yml'
+      - '/includes/.build-buildkit.yml'
       - '/includes/.deploy-k8s.yml'
 
 default:
@@ -592,427 +526,230 @@ stages:
 variables:
   PROJECT_PATH: {{ project_path }}
   NAMESPACE: {{ namespace }}
-  TAG_PREFIX: {{ tag_prefix }}
 
-# ============================================
-# BUILD STAGES - Por cada componente
-# ============================================
 {%- for component in components %}
 
 build-{{ component }}:
-  extends: .build-buildkit-scaleway  # Definido en includes/
+  extends: .build-buildkit
   stage: build-{{ component }}
   variables:
-    PACKAGE_NAME: {{ component }}
+    COMPONENT: {{ component }}
 {%- if use_docker %}
     DOCKERFILE_PATH: {{ dockerfile_paths[component] }}
 {%- endif %}
-  only:
-    refs:
-      - tags
-    variables:
-      - $CI_COMMIT_TAG =~ /^${TAG_PREFIX}-{{ component }}-v.*/
 
-{%- endfor %}
-
-# ============================================
-# DEPLOY STAGES - Por cada componente y entorno
-# ============================================
-{%- for component in components %}
 {%- for env in environments %}
-
 deploy-{{ component }}-{{ env }}:
-  extends: .deploy-k8s  # Definido en includes/
+  extends: .deploy-k8s
   stage: deploy-{{ component }}-{{ env }}
-  variables:
-    COMPONENT: {{ component }}
-    ENVIRONMENT: {{ env }}
-    MANIFESTS_PATH: k8s/{{ component }}
-  environment:
-    name: {{ env }}/{{ component }}
-    url: https://{{ component }}.{{ env }}.$DOMAIN
-  only:
-    refs:
-      - tags
-    variables:
-      - $CI_COMMIT_TAG =~ /^${TAG_PREFIX}-{{ component }}-v.*/
-  {%- if env == environments[-1] %}
+  environment: {{ env }}/{{ component }}
+{%- if env == 'prod' %}
   when: manual
-  {%- endif %}
-
+{%- endif %}
 {%- endfor %}
 {%- endfor %}
 ```
 
-#### Archivo Generado: `.gitlab-ci.yml`
+### Remote Include: Build
 
+**`includes/.build-buildkit.yml`:**
 ```yaml
-# GitLab CI/CD para web-app
-# Generado con gitlab-cicd-creator
-# Repositorio: clients/workoholics/web-app
+# @requires: COMPONENT, DOCKERFILE_PATH
 
-include:
-  - project: 'clients/internal-infrastructure/cicd-templates'
-    ref: main
-    file: 
-      - '/includes/.build-buildkit-scaleway.yml'
-      - '/includes/.deploy-k8s.yml'
-
-default:
-  tags:
-    - buildkit
-    - scaleway
-    - worko-internal
-
-stages:
-  - build-web
-  - deploy-web-pre
-  - deploy-web-prod
-  - build-cms
-  - deploy-cms-pre
-  - deploy-cms-prod
-
-variables:
-  PROJECT_PATH: clients/workoholics/web-app
-  NAMESPACE: wkhs
-  TAG_PREFIX: wkhs
-
-# BUILD STAGES
-build-web:
-  extends: .build-buildkit-scaleway
-  stage: build-web
-  variables:
-    PACKAGE_NAME: web
-    DOCKERFILE_PATH: docker/web/Dockerfile
-  only:
-    refs:
-      - tags
-    variables:
-      - $CI_COMMIT_TAG =~ /^${TAG_PREFIX}-web-v.*/
-
-build-cms:
-  extends: .build-buildkit-scaleway
-  stage: build-cms
-  variables:
-    PACKAGE_NAME: cms
-    DOCKERFILE_PATH: docker/cms/Dockerfile
-  only:
-    refs:
-      - tags
-    variables:
-      - $CI_COMMIT_TAG =~ /^${TAG_PREFIX}-cms-v.*/
-
-# DEPLOY STAGES
-deploy-web-pre:
-  extends: .deploy-k8s
-  stage: deploy-web-pre
-  variables:
-    COMPONENT: web
-    ENVIRONMENT: pre
-    MANIFESTS_PATH: k8s/web
-  environment:
-    name: pre/web
-    url: https://web.pre.$DOMAIN
-  only:
-    refs:
-      - tags
-    variables:
-      - $CI_COMMIT_TAG =~ /^${TAG_PREFIX}-web-v.*/
-
-deploy-web-prod:
-  extends: .deploy-k8s
-  stage: deploy-web-prod
-  variables:
-    COMPONENT: web
-    ENVIRONMENT: prod
-    MANIFESTS_PATH: k8s/web
-  environment:
-    name: prod/web
-    url: https://web.prod.$DOMAIN
-  only:
-    refs:
-      - tags
-    variables:
-      - $CI_COMMIT_TAG =~ /^${TAG_PREFIX}-web-v.*/
-  when: manual
-
-# ... (deploy-cms-pre, deploy-cms-prod similar)
+.build-buildkit:
+  stage: build
+  image:
+    name: moby/buildkit:latest
+    entrypoint: [""]
+  script:
+    - buildctl build \\
+        --frontend dockerfile.v0 \\
+        --local context=. \\
+        --opt filename=$DOCKERFILE_PATH \\
+        --output type=image,push=true
 ```
 
-### Ejemplo 3: Detección Automática de Runners
+**Comentario `@requires`:** El CLI detecta automáticamente variables en includes remotos.
 
-El CLI obtiene automáticamente los runners disponibles desde GitLab en tres niveles:
+---
 
-1. **Runners de la instancia** (si tienes permisos de admin)
-2. **Runners del grupo** (ancestros del proyecto)
-3. **Runners del proyecto** (específicos del proyecto)
+## 🔑 Variables y Seguridad
 
-```bash
-Obteniendo runners disponibles...
-  • Buscando runners de la instancia...
-    ✓ Encontrados 3 runners
-  • Buscando runners del grupo clients/...
-    ✓ Encontrados 2 runners
-  • Buscando runners del proyecto...
-    ✓ Encontrados 0 runners
+### Tipos de Variables
 
-Runners disponibles:
-  1. Runner #97 - Scaleway BuildKit (instancia)
-     Tags: buildkit, scaleway, worko-internal
-     
-  2. Runner #85 - Docker Prod (instancia)
-     Tags: docker, production, linux
-     
-  3. Runner #72 - K8s Staging (grupo)
-     Tags: kubernetes, staging, scaleway
-     
-  4. Runner #58 - General Purpose (grupo)
-     Tags: docker, general
+#### 1. Variables de Plantilla (Sustituidas)
 
-Selecciona un runner (número) [1]: 1
+Procesadas por Jinja2:
+
+| Variable | Generación | Valor ejemplo |
+|----------|------------|---------------|
+| `project_name` | Automático | `mi-app` |
+| `project_path` | Automático | `clients/acme/mi-app` |
+| `namespace` | Automático | `production` |
+| `environments` | Automático | `['pre', 'prod']` |
+| `components` | Interactivo | `['web', 'api']` |
+| `runner_tags` | Interactivo | `['docker', 'gcp']` |
+| `use_docker` | Interactivo | `True` |
+
+**Uso:**
+```yaml
+metadata:
+  name: {{ component }}-{{ project_name }}
+  namespace: {{ namespace }}
 ```
 
-**Ventajas:**
-- ✅ No necesitas conocer los tags de antemano
-- ✅ Solo muestra runners activos y disponibles
-- ✅ Garantiza compatibilidad con la infraestructura existente
-- ✅ Sel eccionas un runner completo con todos sus tags al mismo tiempo
+#### 2. Variables de Entorno (K8s)
 
-## ⚙️ Configuración de GitLab
-
-### Obtener Token de Acceso
-
-1. Ve a GitLab → Settings → Access Tokens
-2. Crea un nuevo token con permisos:
-   - `api` - Acceso completo a la API
-   - `read_repository` - Leer repositorios
-   - `write_repository` - Escribir en repositorios
-3. Guarda el token de forma segura
-4. Úsalo durante `gitlab-cicd init`
-
-### GitLab Agents para Kubernetes
-
-El CLI detecta automáticamente los GitLab Agents configurados en tu repositorio de plantillas.
-
-**Configuración:**
-1. Los agents deben estar en el proyecto del repositorio de plantillas (ej: `clients/infrastructure`)
-2. El CLI los lista automáticamente al crear un proyecto
-3. Puedes seleccionar el cluster para cada entorno
-
-**Formato de KUBE_CONTEXT:**
+**Prompt:**
 ```
-<template_repo>:<agent_name>
+Variables para 'api':
+Nombre: DATABASE_URL
+¿Secret? [y/n]: y
+  🔒 DATABASE_URL → Secret
+Nombre: LOG_LEVEL
+¿Secret? [y/n]: n
+  ✓ LOG_LEVEL → ConfigMap
 ```
 
-**Ejemplo:**
+**Destino:**
+- Secrets: `k8s/<component>/02-secrets.yaml`
+- ConfigMaps: `k8s/<component>/03-configs.yaml`
+
+#### 3. Variables CI/CD (Prefijo `CICD_*`)
+
+**En plantilla:**
+```yaml
+script:
+  - docker login -u $CI_REGISTRY_USER -p $CICD_REGISTRY_TOKEN
 ```
-clients/infrastructure:scaleway-internal-worko-prod
+
+**Durante ejecución:**
 ```
+CICD_REGISTRY_TOKEN: ••••••••
+  ¿Protegida? [y/N]: y
+  ¿Enmascarada? [Y/n]: y
+```
+
+Las variables `CICD_*` **NO** se sustituyen, se guardan en GitLab.
+
+### Buenas Prácticas
+
+#### Variables de Plantilla
+✅ Nombres de recursos, configuración estructural  
+❌ Credenciales, datos sensibles
+
+#### Variables CI/CD
+✅ Tokens, credenciales, URLs externas  
+✅ Marcar como protegidas (producción)  
+✅ Marcar como enmascaradas (TODAS las credenciales)
+
+#### Almacenamiento del CLI
+- Token en keyring (recomendado)
+- Fallback: `~/.gitlab-cicd-creator/.token` (permisos 0o600)
+
+---
 
 ## 🧪 Desarrollo
 
-### Ejecutar tests
+### Setup
 
 ```bash
-pytest
-pytest --cov=gitlab_cicd_creator --cov-report=html  # Con cobertura
-```
+git clone https://github.com/ikerztipot/gitlab-repo-cicd-creator-cli.git
+cd gitlab-repo-cicd-creator-cli
 
-### Formatear código
+python3 -m venv venv
+source venv/bin/activate
 
-```bash
-make format    # black + isort
-make lint      # flake8 + mypy
-```
-
-## 📦 Estructura del Proyecto
-
-```
-gitlab-repo-cicd-creator-cli/
-├── src/gitlab_cicd_creator/
-│   ├── cli.py              # CLI principal con Click
-│   ├── config.py           # Gestión de configuración (~/.gitlab-cicd-creator/config.json)
-│   ├── gitlab_client.py    # Cliente GitLab API con soporte multi-nivel
-│   ├── template_manager.py # Carga plantillas desde GitLab, detecta tipos
-│   └── k8s_generator.py    # Procesador Jinja2, preserva CICD_ vars
-├── tests/                  # Suite de tests con pytest
-├── pyproject.toml         # Configuración del proyecto
-└── README.md              # Esta documentación
-```
-
-## 🤝 Contribuir
-
-¡Gracias por tu interés en contribuir a GitLab CI/CD Creator!
-
-### Proceso de Contribución
-
-1. **Fork** el repositorio
-2. **Clona** tu fork:
-   ```bash
-   git clone https://github.com/TU-USUARIO/gitlab-repo-cicd-creator-cli.git
-   cd gitlab-repo-cicd-creator-cli
-   ```
-3. **Crea una rama** para tu feature:
-   ```bash
-   git checkout -b feature/mi-feature
-   ```
-4. **Haz cambios** siguiendo las guías de estilo
-5. **Ejecuta tests** y verifica que pasen:
-   ```bash
-   make test
-   make lint
-   ```
-6. **Commit** tus cambios con un mensaje descriptivo:
-   ```bash
-   git commit -m 'Add: mi feature'
-   ```
-7. **Push** a tu fork:
-   ```bash
-   git push origin feature/mi-feature
-   ```
-8. **Abre un Pull Request** desde GitHub/GitLab
-
-### Configuración de Desarrollo
-
-```bash
-# Crear y activar entorno virtual
-python -m venv venv
-source venv/bin/activate  # En Windows: venv\Scripts\activate
-
-# Instalar en modo desarrollo con dependencias de testing
 pip install -e ".[dev]"
-```
-
-### Estándares de Código
-
-**Python:**
-- Estilo: PEP 8
-- Longitud de línea: 100 caracteres
-- Formateador: Black
-- Organización de imports: isort
-- Type hints: Requeridos para funciones públicas
-
-**Formateo:**
-```bash
-make format  # Ejecuta black + isort automáticamente
-make lint    # Verifica con flake8 + mypy
 ```
 
 ### Tests
 
 ```bash
-make test          # Ejecutar todos los tests
-make test-cov      # Tests con reporte de cobertura en htmlcov/
+make test          # Todos los tests
+make test-cov      # Con cobertura (htmlcov/)
+pytest tests/test_cli.py -v     # Test específico
 ```
 
-**Escribir Tests:**
-- Usa `pytest` como framework
-- Mock las llamadas a GitLab API usando `unittest.mock`
-- Usa `click.testing.CliRunner` para tests del CLI
-- Cobertura mínima esperada: 80%
+### Formatear y Lint
 
-**Ejemplo:**
-```python
-from click.testing import CliRunner
-from gitlab_cicd_creator.cli import cli
-
-def test_init_command():
-    runner = CliRunner()
-    result = runner.invoke(cli, ['init'], input='https://gitlab.com\ntoken\norg/repo\n')
-    assert result.exit_code == 0
-    assert 'Configuración guardada' in result.output
-```
-
-### Estructura de Commits
-
-Usa el siguiente formato para mensajes de commit:
-
-```
-<tipo>: <descripción corta>
-
-<descripción detallada opcional>
-```
-
-**Tipos de commit:**
-- `Add:` Nueva funcionalidad
-- `Fix:` Corrección de bugs
-- `Docs:` Cambios en documentación
-- `Style:` Formateo, sin cambios en lógica
-- `Refactor:` Refactorización de código
-- `Test:` Añadir o modificar tests
-- `Chore:` Actualización de dependencias, builds
-
-**Ejemplos:**
-```
-Add: soporte para remote includes dinámicos
-
-- Añadida variable template_repo a variables automáticas
-- Actualizada documentación con ejemplos
-- Tests añadidos para nueva funcionalidad
-
-Fix: corrección en detección de runner tags
-
-El método runners.list() no incluía tags en la respuesta.
-Cambiado a runners.get(id) individual para obtener tag_list.
-
-Docs: actualización de README con ejemplos de uso
-```
-
-### Reportar Issues
-
-Al reportar un bug, incluye:
-- Versión de Python: `python --version`
-- Versión del CLI: `gitlab-cicd --version`
-- Comando ejecutado
-- Output completo del error
-- Pasos para reproducir el problema
-
-**Ejemplo de issue:**
-```markdown
-## Bug: Error al crear proyecto con namespace especial
-
-**Ambiente:**
-- Python: 3.11.2
-- CLI: v1.2.3
-- GitLab: self-hosted 15.8
-
-**Comando:**
 ```bash
-gitlab-cicd create my-group/my-project --namespace my_namespace
+make format        # black + isort
+make lint          # flake8 + mypy
+make all           # format + lint + test
 ```
 
-**Error:**
-```
-ValueError: Invalid namespace format
-```
+**Estándares:**
+- Línea: 100 caracteres
+- Formateador: Black
+- Type hints requeridos
 
-**Pasos para reproducir:**
-1. Ejecutar `gitlab-cicd init` con configuración válida
-2. Ejecutar comando de create con namespace que contiene underscore
-3. Error aparece
+### Añadir Funcionalidad
 
-**Comportamiento esperado:**
-El namespace debería aceptarse o mostrar un mensaje de error más claro.
-```
-
-### Preguntas y Sugerencias
-
-Si tienes preguntas o sugerencias:
-- Abre un issue con la etiqueta `question` o `enhancement`
-- Describe claramente tu caso de uso
-- Si es una nueva funcionalidad, explica por qué sería útil
-
-## 📄 Licencia
-
-MIT License - Ver archivo `LICENSE`
-
-## 🙏 Agradecimientos
-
-- [python-gitlab](https://python-gitlab.readthedocs.io/) - Cliente Python para GitLab API
-- [Click](https://click.palletsprojects.com/) - Framework para CLIs
-- [Rich](https://rich.readthedocs.io/) - Formateo de texto en terminal
-- [Jinja2](https://jinja.palletsprojects.com/) - Motor de plantillas
+1. **Validador** (`validators.py`)
+2. **Servicio** (`services/*.py`)
+3. **CLI** (`cli.py`)
+4. **Tests** (`tests/`)
+5. **Docs** (`README.md`)
 
 ---
 
-**Made with ❤️ for the DevOps community**
+## 🤝 Contribuir
+
+### Proceso
+
+1. Fork y clone
+2. Branch: `feature/mi-feature` o `fix/mi-bugfix`
+3. Desarrollar + formatear + tests
+4. Commit: [Conventional Commits](https://www.conventionalcommits.org/)
+   ```bash
+   git commit -m "feat: añadir soporte Helm"
+   git commit -m "fix: corregir validación namespace"
+   ```
+5. Push y Pull Request
+
+### Tipos de Commit
+
+- `feat`: Nueva funcionalidad
+- `fix`: Bug fix
+- `docs`: Documentación
+- `refactor`: Refactorización
+- `test`: Tests
+- `chore`: Mantenimiento
+
+### Reportar Bugs
+
+Issue con:
+- Entorno (Python, SO, versión CLI)
+- Comando ejecutado
+- Output/Error
+- Pasos para reproducir
+
+---
+
+## 📄 Licencia
+
+MIT License - Ver [LICENSE](LICENSE)
+
+---
+
+## 🙏 Agradecimientos
+
+- [python-gitlab](https://python-gitlab.readthedocs.io/) - Cliente GitLab API
+- [Click](https://click.palletsprojects.com/) - Framework CLI
+- [Rich](https://rich.readthedocs.io/) - Terminal UI
+- [Jinja2](https://jinja.palletsprojects.com/) - Motor de plantillas
+- [keyring](https://github.com/jaraco/keyring) - Almacenamiento seguro
+
+---
+
+## 📮 Soporte
+
+- **Issues**: [GitHub Issues](https://github.com/ikerztipot/gitlab-repo-cicd-creator-cli/issues)
+- **Email**: soporte@workoholics.es
+
+---
+
+**Made with ❤️ for DevOps by Workoholics**
+
+*Automatiza tu infraestructura, libera tu tiempo* 🚀

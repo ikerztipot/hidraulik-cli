@@ -387,6 +387,32 @@ class GitLabClient:
         tree = project.repository_tree(path=path, ref=ref, recursive=recursive, get_all=True)
         return [item for item in tree]
     
+    def _enrich_runner_details(self, runner) -> Dict[str, Any]:
+        """
+        Enriquece un runner con sus tags y detalles
+        
+        Args:
+            runner: Objeto runner de GitLab
+            
+        Returns:
+            Diccionario con información del runner
+        """
+        try:
+            runner_detail = self.gl.runners.get(runner.id)
+            tags = runner_detail._attrs.get('tag_list', [])
+        except gitlab.exceptions.GitlabGetError:
+            tags = []
+        
+        return {
+            'id': runner.id,
+            'description': getattr(runner, 'description', ''),
+            'active': getattr(runner, 'active', False),
+            'is_shared': getattr(runner, 'is_shared', False),
+            'online': getattr(runner, 'online', False),
+            'status': getattr(runner, 'status', 'unknown'),
+            'tags': tags,
+        }
+    
     def get_available_runners(self, scope: str = 'all') -> List[Dict[str, Any]]:
         """
         Obtiene los runners disponibles en la instancia
@@ -398,38 +424,9 @@ class GitLabClient:
             Lista de runners con sus tags y estado
         """
         try:
-            # Intentar obtener runners de la instancia (requiere permisos de admin)
             runners = self.gl.runners.list(scope=scope, get_all=True)
-            result = []
-            
-            for runner in runners:
-                # El list() puede no devolver tags, hacer GET individual
-                try:
-                    runner_detail = self.gl.runners.get(runner.id)
-                    tags = runner_detail._attrs.get('tag_list', [])
-                    result.append({
-                        'id': runner.id,
-                        'description': getattr(runner, 'description', ''),
-                        'active': getattr(runner, 'active', False),
-                        'is_shared': getattr(runner, 'is_shared', False),
-                        'online': getattr(runner, 'online', False),
-                        'status': getattr(runner, 'status', 'unknown'),
-                        'tags': tags,
-                    })
-                except gitlab.exceptions.GitlabGetError:
-                    # Si no se puede obtener el detalle, agregar sin tags
-                    result.append({
-                        'id': runner.id,
-                        'description': getattr(runner, 'description', ''),
-                        'active': getattr(runner, 'active', False),
-                        'is_shared': getattr(runner, 'is_shared', False),
-                        'online': getattr(runner, 'online', False),
-                        'status': getattr(runner, 'status', 'unknown'),
-                        'tags': [],
-                    })
-            return result
+            return [self._enrich_runner_details(r) for r in runners]
         except (gitlab.exceptions.GitlabGetError, gitlab.exceptions.GitlabListError):
-            # Si falla (sin permisos admin), retornar lista vacía
             return []
     
     def get_group_runners(self, group_id) -> List[Dict[str, Any]]:
@@ -445,34 +442,7 @@ class GitLabClient:
         try:
             group = self.gl.groups.get(group_id)
             runners = group.runners.list(get_all=True)
-            result = []
-            
-            for runner in runners:
-                # El list() no devuelve tags, necesitamos hacer GET individual
-                try:
-                    runner_detail = self.gl.runners.get(runner.id)
-                    tags = runner_detail._attrs.get('tag_list', [])
-                    result.append({
-                        'id': runner.id,
-                        'description': getattr(runner, 'description', ''),
-                        'active': getattr(runner, 'active', False),
-                        'is_shared': getattr(runner, 'is_shared', False),
-                        'online': getattr(runner, 'online', False),
-                        'status': getattr(runner, 'status', 'unknown'),
-                        'tags': tags,
-                    })
-                except gitlab.exceptions.GitlabGetError:
-                    # Si no se puede obtener el detalle, agregar sin tags
-                    result.append({
-                        'id': runner.id,
-                        'description': getattr(runner, 'description', ''),
-                        'active': getattr(runner, 'active', False),
-                        'is_shared': getattr(runner, 'is_shared', False),
-                        'online': getattr(runner, 'online', False),
-                        'status': getattr(runner, 'status', 'unknown'),
-                        'tags': [],
-                    })
-            return result
+            return [self._enrich_runner_details(r) for r in runners]
         except (gitlab.exceptions.GitlabGetError, gitlab.exceptions.GitlabListError):
             return []
     
@@ -489,33 +459,6 @@ class GitLabClient:
         try:
             project = self._get_project_safe(project_id)
             runners = project.runners.list(get_all=True)
-            result = []
-            
-            for runner in runners:
-                # El list() no devuelve tags, hacer GET individual
-                try:
-                    runner_detail = self.gl.runners.get(runner.id)
-                    tags = runner_detail._attrs.get('tag_list', [])
-                    result.append({
-                        'id': runner.id,
-                        'description': getattr(runner, 'description', ''),
-                        'active': getattr(runner, 'active', False),
-                        'is_shared': getattr(runner, 'is_shared', False),
-                        'online': getattr(runner, 'online', False),
-                        'status': getattr(runner, 'status', 'unknown'),
-                        'tags': tags,
-                    })
-                except gitlab.exceptions.GitlabGetError:
-                    # Si no se puede obtener el detalle, agregar sin tags
-                    result.append({
-                        'id': runner.id,
-                        'description': getattr(runner, 'description', ''),
-                        'active': getattr(runner, 'active', False),
-                        'is_shared': getattr(runner, 'is_shared', False),
-                        'online': getattr(runner, 'online', False),
-                        'status': getattr(runner, 'status', 'unknown'),
-                        'tags': [],
-                    })
-            return result
+            return [self._enrich_runner_details(r) for r in runners]
         except (gitlab.exceptions.GitlabGetError, gitlab.exceptions.GitlabListError):
             return []
