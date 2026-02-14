@@ -1,5 +1,5 @@
 """
-CLI principal para GitLab CI/CD Creator
+CLI principal para Hidraulik
 """
 
 import click
@@ -40,7 +40,7 @@ setup_logging()
 @click.version_option(version="0.1.0")
 def main():
     """
-    GitLab CI/CD Creator - Genera automáticamente pipelines CI/CD para Kubernetes
+    Hidraulik - Genera automáticamente pipelines CI/CD para Kubernetes
     
     Este CLI ayuda a configurar pipelines CI/CD en repositorios de GitLab,
     utilizando plantillas personalizables para despliegues en Kubernetes.
@@ -57,7 +57,7 @@ def init(gitlab_url, token, template_repo):
     Inicializa la configuración del CLI
     """
     console.print(Panel.fit(
-        "[bold blue]Inicialización de GitLab CI/CD Creator[/bold blue]",
+        "[bold blue]Inicialización de Hidraulik[/bold blue]",
         border_style="blue"
     ))
     
@@ -70,14 +70,25 @@ def init(gitlab_url, token, template_repo):
             default=config.get('gitlab_url', 'https://gitlab.com')
         )
     
+    # Limpiar y validar URL
+    gitlab_url = gitlab_url.strip().rstrip('/')
+    if not gitlab_url.startswith('http'):
+        gitlab_url = f"https://{gitlab_url}"
+    
     if not token:
         token = Prompt.ask("Token de acceso personal de GitLab", password=True)
+    
+    # Limpiar token
+    token = token.strip()
     
     if not template_repo:
         template_repo = Prompt.ask(
             "Ruta del repositorio de plantillas (ej: grupo/plantillas-cicd)",
             default=config.get('template_repo', '')
         )
+    
+    # Limpiar ruta del repositorio
+    template_repo = template_repo.strip()
         
     # Validar que el repositorio de plantillas no esté vacío
     if not template_repo or template_repo.strip() == '':
@@ -86,7 +97,7 @@ def init(gitlab_url, token, template_repo):
     
     # Verificar conexión y repositorio de plantillas
     try:
-        console.print("\n[dim]Conectando con GitLab...[/dim]")
+        console.print(f"\n[dim]Conectando con {gitlab_url}...[/dim]")
         client = GitLabClient(gitlab_url, token)
         user = client.get_current_user()
         console.print(f"[green]✓[/green] Conectado como: {user['username']}")
@@ -158,7 +169,7 @@ def init(gitlab_url, token, template_repo):
     config.save()
     
     console.print("\n[green]✓[/green] Configuración guardada exitosamente")
-    console.print("\nYa puedes usar el CLI con: gitlab-cicd create <proyecto>")
+    console.print("\nYa puedes usar el CLI con: hidraulik create <proyecto>")
 
 
 @main.command()
@@ -184,7 +195,7 @@ def create(project_path, namespace, environments, create_project):
         config = Config()
         if not config.is_configured():
             raise ConfigurationError(
-                "No hay configuración. Ejecuta: gitlab-cicd init"
+                "No hay configuración. Ejecuta: hidraulik init"
             )
         
         # Conectar a GitLab
@@ -288,7 +299,7 @@ def create(project_path, namespace, environments, create_project):
         console.print("  1. Genera un nuevo token en GitLab")
         console.print(f"     [cyan]{config.get('gitlab_url')}/-/user_settings/personal_access_tokens[/cyan]")
         console.print("  2. Permisos requeridos: [bold]api[/bold], [bold]read_repository[/bold], [bold]write_repository[/bold]")
-        console.print("  3. Reinicializa: [cyan]gitlab-cicd init[/cyan]")
+        console.print("  3. Reinicializa: [cyan]hidraulik init[/cyan]")
         logger.error(f"Error de autenticación: {e.message}")
     except ProjectNotFoundError as e:
         console.print(f"[red]✗[/red] {e.message}")
@@ -707,7 +718,7 @@ def status(project_path):
             
     except gitlab.exceptions.GitlabAuthenticationError:
         console.print("[red]✗[/red] Error de autenticación: Token de GitLab inválido o expirado")
-        console.print("[yellow]💡[/yellow] Ejecuta [cyan]gitlab-cicd init[/cyan] para reconfigurar")
+        console.print("[yellow]💡[/yellow] Ejecuta [cyan]hidraulik init[/cyan] para reconfigurar")
     except gitlab.exceptions.GitlabGetError as e:
         if "404" in str(e):
             console.print(f"[red]✗[/red] Proyecto '{project_path}' no encontrado")
@@ -752,7 +763,7 @@ def set_variable(project_path, key, value, protected, masked):
         
     except gitlab.exceptions.GitlabAuthenticationError:
         console.print("[red]✗[/red] Error de autenticación: Token de GitLab inválido o expirado")
-        console.print("[yellow]💡[/yellow] Ejecuta [cyan]gitlab-cicd init[/cyan] para reconfigurar")
+        console.print("[yellow]💡[/yellow] Ejecuta [cyan]hidraulik init[/cyan] para reconfigurar")
     except gitlab.exceptions.GitlabGetError as e:
         if "404" in str(e):
             console.print(f"[red]✗[/red] Proyecto '{project_path}' no encontrado")
@@ -769,7 +780,7 @@ def list_templates():
     """
     config = Config()
     if not config.is_configured():
-        console.print("[red]✗[/red] No se ha inicializado la configuración. Ejecuta 'gitlab-cicd init' primero.")
+        console.print("[red]✗[/red] No se ha inicializado la configuración. Ejecuta 'hidraulik init' primero.")
         return
     
     try:
@@ -796,11 +807,11 @@ def list_templates():
             
     except gitlab.exceptions.GitlabAuthenticationError:
         console.print("[red]✗[/red] Error de autenticación: Token de GitLab inválido o expirado")
-        console.print("[yellow]💡[/yellow] Ejecuta [cyan]gitlab-cicd init[/cyan] para reconfigurar")
+        console.print("[yellow]💡[/yellow] Ejecuta [cyan]hidraulik init[/cyan] para reconfigurar")
     except gitlab.exceptions.GitlabGetError as e:
         if "404" in str(e):
             console.print(f"[red]✗[/red] Repositorio de plantillas '{config.get('template_repo')}' no encontrado")
-            console.print("[yellow]💡[/yellow] Verifica la configuración con [cyan]gitlab-cicd init[/cyan]")
+            console.print("[yellow]💡[/yellow] Verifica la configuración con [cyan]hidraulik init[/cyan]")
         else:
             console.print(f"[red]✗[/red] Error al acceder a GitLab: {str(e)}")
     except Exception as e:

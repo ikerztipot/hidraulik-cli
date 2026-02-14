@@ -14,18 +14,18 @@ def setup_logging(level: str = 'INFO', log_dir: Optional[Path] = None) -> loggin
     
     Args:
         level: Nivel de logging (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        log_dir: Directorio donde guardar logs (por defecto: ~/.gitlab-cicd-creator/logs)
+        log_dir: Directorio donde guardar logs (por defecto: ~/.hidraulik/logs)
     
     Returns:
         Logger configurado
     """
     if log_dir is None:
-        log_dir = Path.home() / '.gitlab-cicd-creator' / 'logs'
+        log_dir = Path.home() / '.hidraulik' / 'logs'
     
     log_dir.mkdir(parents=True, exist_ok=True)
     
     # Logger principal
-    logger = logging.getLogger('gitlab_cicd_creator')
+    logger = logging.getLogger('hidraulik')
     logger.setLevel(getattr(logging, level.upper()))
     
     # Evitar duplicación de handlers
@@ -40,7 +40,7 @@ def setup_logging(level: str = 'INFO', log_dir: Optional[Path] = None) -> loggin
     
     # Handler para archivo con rotación (10MB, 5 backups)
     file_handler = logging.handlers.RotatingFileHandler(
-        log_dir / 'gitlab-cicd.log',
+        log_dir / 'hidraulik.log',
         maxBytes=10*1024*1024,  # 10MB
         backupCount=5,
         encoding='utf-8'
@@ -69,4 +69,4 @@ def get_logger(name: str) -> logging.Logger:
     Returns:
         Logger configurado
     """
-    return logging.getLogger(f'gitlab_cicd_creator.{name}')
+    return logging.getLogger(f'hidraulik.{name}')

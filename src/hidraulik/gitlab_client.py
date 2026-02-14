@@ -22,8 +22,23 @@ class GitLabClient:
             url: URL de la instancia de GitLab
             token: Token de acceso personal
         """
-        self.gl = gitlab.Gitlab(url, private_token=token)
-        self.gl.auth()
+        # Limpiar espacios en blanco del token y URL
+        url = url.strip().rstrip('/')
+        token = token.strip()
+        
+        try:
+            self.gl = gitlab.Gitlab(url, private_token=token)
+            self.gl.auth()
+        except gitlab.exceptions.GitlabAuthenticationError as e:
+            raise Exception(
+                f"Error de autenticación: Token inválido o sin permisos necesarios.\n"
+                f"Verifica que el token:\n"
+                f"  • Sea válido y no haya expirado\n"
+                f"  • Tenga al menos los scopes: api, read_api\n"
+                f"  • Tenga acceso a la instancia de GitLab: {url}"
+            )
+        except Exception as e:
+            raise Exception(f"Error al conectar con GitLab: {str(e)}")
     
     def _get_project_safe(self, project_id):
         """

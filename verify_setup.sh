@@ -1,12 +1,12 @@
 #!/bin/bash
-# GitLab CI/CD Creator - Script de Verificación
+# Hidraulik - Script de Verificación
 # Valida que la instalación funcione correctamente
 
 set -e
 
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  🔍 GitLab CI/CD Creator - Verificación"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  🔍 Hidraulik - Verificación"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -46,15 +46,15 @@ else
     exit 1
 fi
 
-# 2. Verificar comando gitlab-cicd
+# 2. Verificar comando hidraulik
 echo ""
-echo "2. Verificando comando gitlab-cicd..."
-if command -v gitlab-cicd &> /dev/null; then
-    success "Comando 'gitlab-cicd' disponible"
-    CLI_VERSION=$(gitlab-cicd --version 2>&1 || echo "unknown")
+echo "2. Verificando comando hidraulik..."
+if command -v hidraulik &> /dev/null; then
+    success "Comando 'hidraulik' disponible"
+    CLI_VERSION=$(hidraulik --version 2>&1 || echo "unknown")
     echo "   Versión: $CLI_VERSION"
 else
-    error "Comando 'gitlab-cicd' no encontrado"
+    error "Comando 'hidraulik' no encontrado"
     echo ""
     echo "   Solución:"
     echo "   1. Ejecuta: ./install.sh"
@@ -105,13 +105,13 @@ fi
 echo ""
 echo "5. Verificando estructura del proyecto..."
 REQUIRED_FILES=(
-    "src/gitlab_cicd_creator/__init__.py"
-    "src/gitlab_cicd_creator/cli.py"
-    "src/gitlab_cicd_creator/config.py"
-    "src/gitlab_cicd_creator/gitlab_client.py"
-    "src/gitlab_cicd_creator/exceptions.py"
-    "src/gitlab_cicd_creator/validators.py"
-    "src/gitlab_cicd_creator/services/variable_service.py"
+    "src/hidraulik/__init__.py"
+    "src/hidraulik/cli.py"
+    "src/hidraulik/config.py"
+    "src/hidraulik/gitlab_client.py"
+    "src/hidraulik/exceptions.py"
+    "src/hidraulik/validators.py"
+    "src/hidraulik/services/variable_service.py"
     "pyproject.toml"
     "README.md"
 )
@@ -127,7 +127,7 @@ done
 # 6. Verificar configuración (si existe)
 echo ""
 echo "6. Verificando configuración..."
-CONFIG_DIR="$HOME/.gitlab-cicd-creator"
+CONFIG_DIR="$HOME/.hidraulik"
 if [ -d "$CONFIG_DIR" ]; then
     success "Directorio de configuración existe: $CONFIG_DIR"
     
@@ -152,19 +152,19 @@ if [ -d "$CONFIG_DIR" ]; then
             fi
         fi
     else
-        warning "config.json no encontrado (ejecuta 'gitlab-cicd init')"
+        warning "config.json no encontrado (ejecuta 'hidraulik init')"
     fi
     
     # Verificar token
     TOKEN_EXISTS=false
-    if python3 -c "import keyring; keyring.get_password('gitlab-cicd-creator', 'gitlab_token')" &>/dev/null 2>&1; then
+    if python3 -c "import keyring; keyring.get_password('hidraulik', 'gitlab_token')" &>/dev/null 2>&1; then
         success "Token almacenado en keyring (seguro)"
         TOKEN_EXISTS=true
     elif [ -f "$CONFIG_DIR/.token" ]; then
         success "Token en fallback file (permisos: $(stat -f '%Lp' "$CONFIG_DIR/.token" 2>/dev/null || stat -c '%a' "$CONFIG_DIR/.token" 2>/dev/null))"
         TOKEN_EXISTS=true
     else
-        warning "Token no configurado (ejecuta 'gitlab-cicd init')"
+        warning "Token no configurado (ejecuta 'hidraulik init')"
     fi
     
     # Verificar logs
@@ -176,7 +176,7 @@ if [ -d "$CONFIG_DIR" ]; then
     fi
 else
     warning "Directorio de configuración no existe"
-    echo "   Primera vez: Ejecuta 'gitlab-cicd init'"
+    echo "   Primera vez: Ejecuta 'hidraulik init'"
 fi
 
 # 7. Test de funcionalidad básica
@@ -184,19 +184,19 @@ echo ""
 echo "7. Probando comandos básicos..."
 
 # Test --help
-if gitlab-cicd --help &>/dev/null; then
-    success "gitlab-cicd --help funciona"
+if hidraulik --help &>/dev/null; then
+    success "hidraulik --help funciona"
 else
-    error "gitlab-cicd --help falla"
+    error "hidraulik --help falla"
 fi
 
 # Test comandos disponibles
 COMMANDS=("init" "create" "status" "set-variable" "list-templates")
 for cmd in "${COMMANDS[@]}"; do
-    if gitlab-cicd $cmd --help &>/dev/null; then
-        success "gitlab-cicd $cmd disponible"
+    if hidraulik $cmd --help &>/dev/null; then
+        success "hidraulik $cmd disponible"
     else
-        error "gitlab-cicd $cmd NO disponible"
+        error "hidraulik $cmd NO disponible"
     fi
 done
 
@@ -229,7 +229,7 @@ echo ""
 
 ISSUES=false
 
-if ! command -v gitlab-cicd &> /dev/null; then
+if ! command -v hidraulik &> /dev/null; then
     error "CLI no instalado correctamente"
     ISSUES=true
 fi
@@ -240,7 +240,7 @@ if [ ${#MISSING_MODULES[@]} -ne 0 ]; then
 fi
 
 if [ ! -d "$CONFIG_DIR" ] || [ ! -f "$CONFIG_DIR/config.json" ]; then
-    warning "Configuración pendiente (ejecuta 'gitlab-cicd init')"
+    warning "Configuración pendiente (ejecuta 'hidraulik init')"
 fi
 
 if [ "$ISSUES" = true ]; then
@@ -256,9 +256,9 @@ else
     success "¡Verificación completada!"
     echo ""
     echo "Próximos pasos:"
-    echo "  1️⃣  gitlab-cicd init         # Configurar credenciales (si no lo has hecho)"
-    echo "  2️⃣  gitlab-cicd --help       # Ver todos los comandos"
-    echo "  3️⃣  gitlab-cicd create --help # Ver opciones de creación"
+    echo "  1️⃣  hidraulik init         # Configurar credenciales (si no lo has hecho)"
+    echo "  2️⃣  hidraulik --help       # Ver todos los comandos"
+    echo "  3️⃣  hidraulik create --help # Ver opciones de creación"
     echo ""
     echo "Documentación completa: README.md"
     echo ""

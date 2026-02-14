@@ -1,4 +1,4 @@
-# GitLab CI/CD Creator
+# Hidraulik
 
 > CLI profesional para automatizar la creación de pipelines CI/CD en GitLab con despliegues en Kubernetes
 
@@ -67,8 +67,8 @@
 
 ```bash
 # Clonar repositorio
-git clone https://github.com/ikerztipot/gitlab-repo-cicd-creator-cli.git
-cd gitlab-repo-cicd-creator-cli
+git clone https://github.com/ikerztipot/hidraulik.git
+cd hidraulik
 
 # Ejecutar instalador
 ./install.sh
@@ -92,7 +92,7 @@ pipx install .
 pip install --user .
 
 # Verificar instalación
-gitlab-cicd --version
+hidraulik --version
 ```
 
 ### Desinstalación
@@ -101,7 +101,7 @@ gitlab-cicd --version
 ./uninstall.sh
 ```
 
-Elimina el CLI y opcionalmente la configuración en `~/.gitlab-cicd-creator/`.
+Elimina el CLI y opcionalmente la configuración en `~/.hidraulik/`.
 
 ---
 
@@ -110,7 +110,7 @@ Elimina el CLI y opcionalmente la configuración en `~/.gitlab-cicd-creator/`.
 ### 1. Configurar Credenciales
 
 ```bash
-gitlab-cicd init
+hidraulik init
 ```
 
 El CLI solicitará:
@@ -119,14 +119,14 @@ El CLI solicitará:
 - **Repositorio de plantillas**: `clients/internal-infrastructure/cicd-templates`
 
 **Almacenamiento:**
-- Config: `~/.gitlab-cicd-creator/config.json` (sin token)
-- Token: Keyring del sistema (seguro) o fallback `~/.gitlab-cicd-creator/.token` (permisos 0o600)
-- Logs: `~/.gitlab-cicd-creator/logs/` (rotación 10MB, 5 archivos)
+- Config: `~/.hidraulik/config.json` (sin token)
+- Token: Keyring del sistema (seguro) o fallback `~/.hidraulik/.token` (permisos 0o600)
+- Logs: `~/.hidraulik/logs/` (rotación 10MB, 5 archivos)
 
 ### 2. Crear CI/CD para un Proyecto
 
 ```bash
-gitlab-cicd create clients/acme/mi-app \\
+hidraulik create clients/acme/mi-app \\
   --namespace production \\
   --environments pre,prod \\
   --create-project
@@ -159,13 +159,13 @@ gitlab-cicd create clients/acme/mi-app \\
 
 ```bash
 # Ver estado
-gitlab-cicd status clients/acme/mi-app
+hidraulik status clients/acme/mi-app
 
 # Listar plantillas
-gitlab-cicd list-templates
+hidraulik list-templates
 
 # Añadir variable
-gitlab-cicd set-variable clients/acme/mi-app API_KEY "secreto" --masked --protected
+hidraulik set-variable clients/acme/mi-app API_KEY "secreto" --masked --protected
 ```
 
 ---
@@ -175,7 +175,7 @@ gitlab-cicd set-variable clients/acme/mi-app API_KEY "secreto" --masked --protec
 ### `init` - Configuración Inicial
 
 ```bash
-gitlab-cicd init
+hidraulik init
 ```
 
 Configura URL, token (almacenado en keyring) y repositorio de plantillas.
@@ -184,14 +184,14 @@ Configura URL, token (almacenado en keyring) y repositorio de plantillas.
 - **macOS**: Keychain
 - **Linux**: Secret Service (GNOME Keyring/KWallet)
 - **Windows**: Windows Credential Manager
-- **Fallback**: `~/.gitlab-cicd-creator/.token` (permisos 0o600)
+- **Fallback**: `~/.hidraulik/.token` (permisos 0o600)
 
 ---
 
 ### `create` - Crear CI/CD
 
 ```bash
-gitlab-cicd create PROJECT_PATH --namespace NAMESPACE [OPTIONS]
+hidraulik create PROJECT_PATH --namespace NAMESPACE [OPTIONS]
 ```
 
 **Argumentos:**
@@ -210,7 +210,7 @@ gitlab-cicd create PROJECT_PATH --namespace NAMESPACE [OPTIONS]
 
 **Ejemplo:**
 ```bash
-gitlab-cicd create clients/workoholics/backend \\
+hidraulik create clients/workoholics/backend \\
   --namespace wkhs-api \\
   --environments staging,production \\
   --create-project
@@ -259,7 +259,7 @@ Generando archivos...
 ### `status` - Estado del Proyecto
 
 ```bash
-gitlab-cicd status PROJECT_PATH
+hidraulik status PROJECT_PATH
 ```
 
 Muestra:
@@ -273,7 +273,7 @@ Muestra:
 ### `set-variable` - Configurar Variable CI/CD
 
 ```bash
-gitlab-cicd set-variable PROJECT_PATH KEY VALUE [OPTIONS]
+hidraulik set-variable PROJECT_PATH KEY VALUE [OPTIONS]
 ```
 
 **Opciones:**
@@ -284,13 +284,13 @@ gitlab-cicd set-variable PROJECT_PATH KEY VALUE [OPTIONS]
 **Ejemplos:**
 ```bash
 # Variable simple
-gitlab-cicd set-variable clients/acme/app API_URL "https://api.acme.com"
+hidraulik set-variable clients/acme/app API_URL "https://api.acme.com"
 
 # Secret protegido
-gitlab-cicd set-variable clients/acme/app DB_PASS "secret" --masked --protected
+hidraulik set-variable clients/acme/app DB_PASS "secret" --masked --protected
 
 # Por entorno
-gitlab-cicd set-variable clients/acme/app REPLICAS "3" --environment-scope production
+hidraulik set-variable clients/acme/app REPLICAS "3" --environment-scope production
 ```
 
 ---
@@ -298,7 +298,7 @@ gitlab-cicd set-variable clients/acme/app REPLICAS "3" --environment-scope produ
 ### `list-templates` - Listar Plantillas
 
 ```bash
-gitlab-cicd list-templates
+hidraulik list-templates
 ```
 
 Muestra plantillas disponibles del repositorio configurado, organizadas por tipo (Pipeline, K8s, Helm, Config).
@@ -315,7 +315,7 @@ Muestra plantillas disponibles del repositorio configurado, organizadas por tipo
    - ✅ `read_repository`
    - ✅ `write_repository`
 3. Copiar token (`glpat-xxxxxxxxxxxx`)
-4. Usar en `gitlab-cicd init`
+4. Usar en `hidraulik init`
 
 ### 2. GitLab Kubernetes Agents
 
@@ -366,8 +366,8 @@ Selecciona (1-2): 2
 ### Estructura de Directorios
 
 ```
-gitlab-repo-cicd-creator-cli/
-├── src/gitlab_cicd_creator/
+hidraulik/
+├── src/hidraulik/
 │   ├── cli.py                      # CLI principal (orquestación)
 │   ├── config.py                   # Config con keyring
 │   ├── exceptions.py               # Excepciones personalizadas
@@ -447,7 +447,7 @@ GitLabCICDError                 # Base
 ### Validadores Disponibles
 
 ```python
-from gitlab_cicd_creator.validators import (
+from hidraulik.validators import (
     validate_k8s_namespace,      # RFC 1123
     validate_project_path,        # namespace/project
     validate_port,                # 1-65535
@@ -645,7 +645,7 @@ Las variables `CICD_*` **NO** se sustituyen, se guardan en GitLab.
 
 #### Almacenamiento del CLI
 - Token en keyring (recomendado)
-- Fallback: `~/.gitlab-cicd-creator/.token` (permisos 0o600)
+- Fallback: `~/.hidraulik/.token` (permisos 0o600)
 
 ---
 
@@ -654,8 +654,8 @@ Las variables `CICD_*` **NO** se sustituyen, se guardan en GitLab.
 ### Setup
 
 ```bash
-git clone https://github.com/ikerztipot/gitlab-repo-cicd-creator-cli.git
-cd gitlab-repo-cicd-creator-cli
+git clone https://github.com/ikerztipot/hidraulik.git
+cd hidraulik
 
 python3 -m venv venv
 source venv/bin/activate
@@ -745,7 +745,7 @@ MIT License - Ver [LICENSE](LICENSE)
 
 ## 📮 Soporte
 
-- **Issues**: [GitHub Issues](https://github.com/ikerztipot/gitlab-repo-cicd-creator-cli/issues)
+- **Issues**: [GitHub Issues](https://github.com/ikerztipot/hidraulik/issues)
 - **Email**: soporte@workoholics.es
 
 ---

@@ -6,7 +6,7 @@ import pytest
 import tempfile
 import shutil
 from pathlib import Path
-from gitlab_cicd_creator.config import Config
+from hidraulik.config import Config
 
 
 @pytest.fixture

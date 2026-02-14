@@ -4,7 +4,7 @@ Tests para el módulo TemplateManager
 
 import pytest
 from pathlib import Path
-from gitlab_cicd_creator.template_manager import TemplateManager
+from hidraulik.template_manager import TemplateManager
 
 
 def test_template_manager_init():

@@ -1,5 +1,5 @@
 """
-Jerarquía de excepciones personalizada para GitLab CI/CD Creator
+Jerarquía de excepciones personalizada para Hidraulik
 """
 
 

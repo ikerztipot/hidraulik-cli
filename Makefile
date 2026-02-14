@@ -1,4 +1,4 @@
-# Makefile para GitLab CI/CD Creator
+# Makefile para Hidraulik
 
 .PHONY: help install install-dev test lint format clean build
 
@@ -16,7 +16,7 @@ test: ## Ejecuta los tests
 	pytest
 
 test-cov: ## Ejecuta los tests con reporte de cobertura
-	pytest --cov=gitlab_cicd_creator --cov-report=html --cov-report=term
+	pytest --cov=hidraulik --cov-report=html --cov-report=term
 
 lint: ## Ejecuta linters (flake8, mypy)
 	flake8 src/

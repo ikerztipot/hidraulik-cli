@@ -1,12 +1,12 @@
 #!/bin/bash
-# GitLab CI/CD Creator - Instalador
+# Hidraulik - Instalador
 # Detecta automáticamente el entorno e instala correctamente
 
 set -e
 
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  🚀 GitLab CI/CD Creator - Instalador"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  🚀 Hidraulik - Instalador"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -41,7 +41,7 @@ fi
 if command -v pipx &> /dev/null; then
     echo "✓ pipx detectado"
     echo ""
-    echo "📦 Instalando gitlab-cicd con pipx..."
+    echo "📦 Instalando hidraulik con pipx..."
     pipx install . --force
     
     echo ""
@@ -49,12 +49,12 @@ if command -v pipx &> /dev/null; then
     echo "  ✅ ¡Instalación completada!"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    echo "El comando 'gitlab-cicd' está disponible globalmente."
+    echo "El comando 'hidraulik' está disponible globalmente."
     echo ""
     echo "Próximos pasos:"
-    echo "  1️⃣  gitlab-cicd init         # Configurar credenciales"
-    echo "  2️⃣  gitlab-cicd --help       # Ver todos los comandos"
-    echo "  3️⃣  gitlab-cicd create --help # Ver opciones de creación"
+    echo "  1️⃣  hidraulik init         # Configurar credenciales"
+    echo "  2️⃣  hidraulik --help       # Ver todos los comandos"
+    echo "  3️⃣  hidraulik create --help # Ver opciones de creación"
     echo ""
     
 else
@@ -63,7 +63,7 @@ else
     echo "⚙️  pipx no detectado. Usando instalación con pip..."
     echo "   💡 Tip: Instala pipx para mejor gestión: python3 -m pip install --user pipx"
     echo ""
-    echo "📦 Instalando gitlab-cicd..."
+    echo "📦 Instalando hidraulik..."
     
     # Detectar si estamos en un virtualenv
     if [[ -n "$VIRTUAL_ENV" ]]; then
@@ -109,8 +109,8 @@ else
         echo "O cierra y abre tu terminal."
         echo ""
         echo "Después podrás usar:"
-        echo "  gitlab-cicd init"
-        echo "  gitlab-cicd --help"
+        echo "  hidraulik init"
+        echo "  hidraulik --help"
         echo ""
         
         # Intentar añadir automáticamente
@@ -118,7 +118,7 @@ else
         echo
         if [[ $REPLY =~ ^[Ss]$ ]]; then
             echo "" >> ~/.zshrc
-            echo "# GitLab CI/CD Creator" >> ~/.zshrc
+            echo "# Hidraulik" >> ~/.zshrc
             echo "export PATH=\"$USER_BIN:\$PATH\"" >> ~/.zshrc
             echo ""
             echo "✓ Añadido a ~/.zshrc"
@@ -133,11 +133,11 @@ else
         echo "  ✅ ¡Instalación completada!"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo ""
-        echo "El comando 'gitlab-cicd' está disponible."
+        echo "El comando 'hidraulik' está disponible."
         echo ""
         echo "Próximos pasos:"
-        echo "  1️⃣  gitlab-cicd init      # Configurar credenciales"
-        echo "  2️⃣  gitlab-cicd --help    # Ver comandos disponibles"
+        echo "  1️⃣  hidraulik init      # Configurar credenciales"
+        echo "  2️⃣  hidraulik --help    # Ver comandos disponibles"
         echo ""
     fi
 fi

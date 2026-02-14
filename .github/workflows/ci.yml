@@ -28,7 +28,7 @@ jobs:
     
     - name: Run tests
       run: |
-        pytest --cov=gitlab_cicd_creator --cov-report=xml
+        pytest --cov=hidraulik --cov-report=xml
     
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3

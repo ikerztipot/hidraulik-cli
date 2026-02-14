@@ -1,5 +1,5 @@
 """
-GitLab CI/CD Creator CLI
+Hidraulik CLI
 Un CLI para generar automáticamente configuraciones CI/CD para repositorios de GitLab
 """
 

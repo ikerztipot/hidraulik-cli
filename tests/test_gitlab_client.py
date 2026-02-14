@@ -4,13 +4,13 @@ Tests para el módulo GitLabClient
 
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-from gitlab_cicd_creator.gitlab_client import GitLabClient
+from hidraulik.gitlab_client import GitLabClient
 
 
 @pytest.fixture
 def mock_gitlab():
     """Fixture que proporciona un mock de GitLab"""
-    with patch('gitlab_cicd_creator.gitlab_client.gitlab.Gitlab') as mock_gl:
+    with patch('hidraulik.gitlab_client.gitlab.Gitlab') as mock_gl:
         mock_instance = Mock()
         mock_gl.return_value = mock_instance
         mock_instance.auth.return_value = None
@@ -52,7 +52,8 @@ def test_get_project(mock_gitlab):
     
     assert project['id'] == 123
     assert project['name'] == 'test-project'
-    mock_gitlab.projects.get.assert_called_once_with('test/test-project')
+    # GitLabClient hace URL-encoding del path (/ -> %2F)
+    mock_gitlab.projects.get.assert_called_once_with('test%2Ftest-project')
 
 
 def test_create_or_update_variable(mock_gitlab):
@@ -92,8 +93,16 @@ def test_get_available_runners(mock_gitlab):
     mock_runner2.status = "online"
     mock_runner2.tag_list = ["buildkit", "scaleway"]
     
+    # Mock para _enrich_runner_details - simula gl.runners.get()
+    mock_runner_detail1 = Mock()
+    mock_runner_detail1._attrs = {'tag_list': ["docker", "linux"]}
+    
+    mock_runner_detail2 = Mock()
+    mock_runner_detail2._attrs = {'tag_list': ["buildkit", "scaleway"]}
+    
     mock_gitlab.runners = Mock()
     mock_gitlab.runners.list = Mock(return_value=[mock_runner1, mock_runner2])
+    mock_gitlab.runners.get = Mock(side_effect=[mock_runner_detail1, mock_runner_detail2])
     
     client = GitLabClient('https://gitlab.com', 'test-token')
     runners = client.get_available_runners(scope='active')
@@ -116,12 +125,18 @@ def test_get_group_runners(mock_gitlab):
     mock_runner.status = "online"
     mock_runner.tag_list = ["worko-internal", "kubernetes"]
     
+    # Mock para _enrich_runner_details
+    mock_runner_detail = Mock()
+    mock_runner_detail._attrs = {'tag_list': ["worko-internal", "kubernetes"]}
+    
     mock_group = Mock()
     mock_group.runners = Mock()
     mock_group.runners.list = Mock(return_value=[mock_runner])
     
     mock_gitlab.groups = Mock()
     mock_gitlab.groups.get = Mock(return_value=mock_group)
+    mock_gitlab.runners = Mock()
+    mock_gitlab.runners.get = Mock(return_value=mock_runner_detail)
     
     client = GitLabClient('https://gitlab.com', 'test-token')
     runners = client.get_group_runners('clients')
@@ -142,16 +157,24 @@ def test_get_project_runners(mock_gitlab):
     mock_runner.status = "online"
     mock_runner.tag_list = ["staging", "testing"]
     
+    # Mock para _enrich_runner_details
+    mock_runner_detail = Mock()
+    mock_runner_detail._attrs = {'tag_list': ["staging", "testing"]}
+    
     mock_project = Mock()
     mock_project.runners = Mock()
     mock_project.runners.list = Mock(return_value=[mock_runner])
     
     mock_gitlab.projects = Mock()
     mock_gitlab.projects.get = Mock(return_value=mock_project)
+    mock_gitlab.runners = Mock()
+    mock_gitlab.runners.get = Mock(return_value=mock_runner_detail)
     
     client = GitLabClient('https://gitlab.com', 'test-token')
     runners = client.get_project_runners('test/project')
     
     assert len(runners) == 1
+    assert runners[0]['id'] == 20
+    assert runners[0]['tags'] == ["staging", "testing"]
     assert runners[0]['id'] == 20
     assert runners[0]['tags'] == ["staging", "testing"]

@@ -3,7 +3,7 @@ Tests para el módulo K8sGenerator
 """
 
 import pytest
-from gitlab_cicd_creator.k8s_generator import K8sGenerator
+from hidraulik.k8s_generator import K8sGenerator
 
 
 def test_k8s_generator_init():
@@ -33,42 +33,79 @@ def test_process_templates():
 
 
 def test_generate_gitlab_ci():
-    """Test de generación de .gitlab-ci.yml"""
+    """Test de generación de .gitlab-ci.yml con plantilla"""
     generator = K8sGenerator()
+    templates = {
+        '.gitlab-ci.yml': '''
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+  script:
+    - echo "Building {{ project_name }}"
+    - docker build -t {{ docker_image }} .
+
+deploy:
+  stage: deploy
+  script:
+    - kubectl apply -f deployment.yaml
+  environment:
+    name: {{ environment }}
+'''
+    }
     variables = {
         'project_name': 'test-app',
-        'docker_registry': 'registry.gitlab.com',
         'docker_image': 'test/app',
-        'namespace': 'production',
-        'environment': 'prod',
-        'k8s_cluster': 'prod-cluster'
+        'environment': 'prod'
     }
     
-    result = generator.generate_gitlab_ci(variables)
+    result = generator.process_templates(templates, variables)
     
-    assert 'test-app' in result
-    assert 'stages:' in result
-    assert 'build' in result
-    assert 'deploy' in result
+    assert 'test-app' in result['.gitlab-ci.yml']
+    assert 'stages:' in result['.gitlab-ci.yml']
+    assert 'build' in result['.gitlab-ci.yml']
+    assert 'deploy' in result['.gitlab-ci.yml']
 
 
 def test_generate_kubernetes_deployment():
-    """Test de generación de deployment de K8s"""
+    """Test de generación de deployment de K8s con plantilla"""
     generator = K8sGenerator()
+    templates = {
+        'deployment.yaml': '''
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ project_name }}
+  namespace: {{ namespace }}
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: {{ project_name }}
+        image: {{ docker_image }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ project_name }}
+  namespace: {{ namespace }}
+'''
+    }
     variables = {
         'project_name': 'test-app',
         'namespace': 'production',
-        'environment': 'prod',
-        'docker_registry': 'registry.gitlab.com',
-        'docker_image': 'test/app'
+        'docker_image': 'registry.gitlab.com/test/app'
     }
     
-    result = generator.generate_kubernetes_deployment(variables)
+    result = generator.process_templates(templates, variables)
     
-    assert 'kind: Deployment' in result
-    assert 'kind: Service' in result
-    assert 'test-app' in result
-    assert 'production' in result
+    assert 'kind: Deployment' in result['deployment.yaml']
+    assert 'kind: Service' in result['deployment.yaml']
+    assert 'test-app' in result['deployment.yaml']
+    assert 'production' in result['deployment.yaml']
 
 
 def test_set_cicd_vars():

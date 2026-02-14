@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "gitlab-cicd-creator"
+name = "hidraulik"
 version = "0.3.0"
 description = "CLI para generar CI/CD automáticamente en repositorios de GitLab para Kubernetes"
 readme = "README.md"
@@ -47,13 +47,13 @@ dev = [
 ]
 
 [project.scripts]
-gitlab-cicd = "gitlab_cicd_creator.cli:main"
+hidraulik = "hidraulik.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/ikerztipot/gitlab-repo-cicd-creator-cli"
-Documentation = "https://github.com/ikerztipot/gitlab-repo-cicd-creator-cli/blob/main/README.md"
-Repository = "https://github.com/ikerztipot/gitlab-repo-cicd-creator-cli"
-Issues = "https://github.com/ikerztipot/gitlab-repo-cicd-creator-cli/issues"
+Homepage = "https://github.com/ikerztipot/hidraulik"
+Documentation = "https://github.com/ikerztipot/hidraulik/blob/main/README.md"
+Repository = "https://github.com/ikerztipot/hidraulik"
+Issues = "https://github.com/ikerztipot/hidraulik/issues"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -81,4 +81,4 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --cov=gitlab_cicd_creator --cov-report=term-missing --cov-report=html"
+addopts = "-v --cov=hidraulik --cov-report=term-missing --cov-report=html"

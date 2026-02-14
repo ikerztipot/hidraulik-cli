@@ -144,5 +144,5 @@ cython_debug/
 Thumbs.db
 
 # Project specific
-.gitlab-cicd-creator/
+.hidraulik/
 templates_cache/

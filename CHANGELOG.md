@@ -1,4 +1,4 @@
-# GitLab CI/CD Creator - Changelog
+# Hidraulik - Changelog
 
 Todos los cambios notables en este proyecto serán documentados en este archivo.
 
@@ -154,4 +154,4 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 - Configuración persistente
 - Interfaz de usuario rica con colores en terminal
 
-[0.1.0]: https://github.com/ikerztipot/gitlab-repo-cicd-creator-cli/releases/tag/v0.1.0
+[0.1.0]: https://github.com/ikerztipot/hidraulik/releases/tag/v0.1.0
