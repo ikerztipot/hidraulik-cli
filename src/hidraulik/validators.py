@@ -9,6 +9,39 @@ from typing import List
 from .exceptions import ValidationError
 
 
+def normalize_to_k8s_namespace(name: str) -> str:
+    """
+    Normaliza un nombre a formato válido para namespace de Kubernetes (RFC 1123)
+    
+    Args:
+        name: Nombre a normalizar
+        
+    Returns:
+        Nombre normalizado (lowercase, solo letras, números y guiones)
+    """
+    # Convertir a minúsculas
+    normalized = name.lower()
+    
+    # Reemplazar caracteres no permitidos por guiones
+    normalized = re.sub(r'[^a-z0-9-]', '-', normalized)
+    
+    # Eliminar guiones consecutivos
+    normalized = re.sub(r'-+', '-', normalized)
+    
+    # Eliminar guiones al inicio y final
+    normalized = normalized.strip('-')
+    
+    # Limitar a 63 caracteres
+    if len(normalized) > 63:
+        normalized = normalized[:63].rstrip('-')
+    
+    # Si queda vacío, usar default
+    if not normalized:
+        normalized = 'default'
+    
+    return normalized
+
+
 def validate_k8s_namespace(namespace: str) -> bool:
     """
     Valida que el namespace cumple con RFC 1123

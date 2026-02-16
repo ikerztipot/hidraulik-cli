@@ -63,7 +63,8 @@ class K8sConfigService:
         self,
         component: str,
         has_config_vars: bool = False,
-        has_secret_vars: bool = False
+        has_secret_vars: bool = False,
+        namespace_provided: bool = False
     ) -> Tuple[bool, List[str]]:
         """
         Configura deployment de K8s para un componente
@@ -72,6 +73,7 @@ class K8sConfigService:
             component: Nombre del componente
             has_config_vars: Si tiene variables de configuración
             has_secret_vars: Si tiene variables secretas
+            namespace_provided: Si se especificó --namespace explícitamente
         
         Returns:
             Tupla de (deploy_to_k8s, manifests_list)
@@ -87,8 +89,13 @@ class K8sConfigService:
         self.console.print(f"  Manifiestos para '{component}':")
         manifests = []
         
-        # Namespace (opcional)
-        if Confirm.ask("    - Namespace", default=False):
+        # Namespace (auto-activar si fue especificado en --namespace)
+        if namespace_provided:
+            manifests.append('namespace')
+            self.console.print(
+                "    - Namespace [dim](activado automáticamente)[/dim]"
+            )
+        elif Confirm.ask("    - Namespace", default=True):
             manifests.append('namespace')
         
         # Secrets (auto-activar si hay secret_vars)

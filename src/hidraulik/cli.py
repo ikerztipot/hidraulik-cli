@@ -18,7 +18,8 @@ from .validators import (
     validate_k8s_namespace,
     validate_project_path,
     validate_component_name,
-    sanitize_file_path
+    sanitize_file_path,
+    normalize_to_k8s_namespace
 )
 from .exceptions import (
     GitLabCICDError,
@@ -174,7 +175,7 @@ def init(gitlab_url, token, template_repo):
 
 @main.command()
 @click.argument('project_path')
-@click.option('--namespace', help='Namespace de Kubernetes', required=True)
+@click.option('--namespace', help='Namespace de Kubernetes', default=None)
 @click.option('--environments', help='Entornos a configurar (separados por coma)', default='dev,pre,pro')
 @click.option('--create-project', is_flag=True, help='Crear nuevo proyecto si no existe')
 def create(project_path, namespace, environments, create_project):
@@ -189,7 +190,9 @@ def create(project_path, namespace, environments, create_project):
         
         # Validar inputs
         validate_project_path(project_path)
-        validate_k8s_namespace(namespace)
+        
+        # Guardar si namespace fue explícito
+        namespace_explicit = namespace is not None
         
         # Cargar configuración
         config = Config()
@@ -225,11 +228,18 @@ def create(project_path, namespace, environments, create_project):
             environments
         )
         
+        # Validar namespace final
+        validate_k8s_namespace(project_config['namespace'])
+        
+        # Añadir template_repo desde la configuración
+        project_config['template_repo'] = config.get('template_repo')
+        
         # Configurar componentes
         components_config = _configure_components(
             project_config['components'],
             variable_service,
-            k8s_service
+            k8s_service,
+            namespace_explicit  # Pasar si fue explícito para auto-activar
         )
         
         # Seleccionar runner
@@ -356,6 +366,14 @@ def _collect_project_configuration(project_path: str, namespace: str, environmen
     
     # Componentes
     project_name = project_path.split('/')[-1]
+    
+    # Namespace (preguntar si no fue especificado)
+    if namespace is None:
+        default_namespace = normalize_to_k8s_namespace(project_name)
+        namespace = Prompt.ask(
+            "Namespace de Kubernetes",
+            default=default_namespace
+        )
     components_input = Prompt.ask(
         "Componentes (separados por coma)",
         default="web"
@@ -418,11 +436,11 @@ def _collect_project_configuration(project_path: str, namespace: str, environmen
         'dockerfile_paths': dockerfile_paths,
         'container_ports': container_ports,
         'tag_prefix': tag_prefix,
-        'template_repo': None,  # Se añadirá después
+        'template_repo': None,  # Se añade desde config.get('template_repo') después
     }
 
 
-def _configure_components(components: list, variable_service: VariableService, k8s_service: K8sConfigService) -> dict:
+def _configure_components(components: list, variable_service: VariableService, k8s_service: K8sConfigService, namespace_explicit: bool = False) -> dict:
     """Configura variables, K8s y recursos para cada componente"""
     # Variables de entorno
     console.print("\n[bold]Variables de entorno:[/bold]")
@@ -450,7 +468,8 @@ def _configure_components(components: list, variable_service: VariableService, k
         deploy, manifests = k8s_service.configure_component_deployment(
             component,
             has_configs,
-            has_secrets
+            has_secrets,
+            namespace_provided=namespace_explicit
         )
         
         k8s_deployment[component] = deploy
