@@ -19,7 +19,8 @@ from .validators import (
     validate_project_path,
     validate_component_name,
     sanitize_file_path,
-    normalize_to_k8s_namespace
+    normalize_to_k8s_namespace,
+    normalize_component_name
 )
 from .exceptions import (
     GitLabCICDError,
@@ -378,11 +379,24 @@ def _collect_project_configuration(project_path: str, namespace: str, environmen
         "Componentes (separados por coma)",
         default="web"
     )
-    components = [c.strip() for c in components_input.split(',') if c.strip()]
+    # Normalizar y limpiar componentes
+    components_raw = [c.strip() for c in components_input.split(',') if c.strip()]
+    components = [normalize_component_name(c) for c in components_raw]
+    
+    # Mostrar si se normalizó algún componente
+    for raw, normalized in zip(components_raw, components):
+        if raw != normalized:
+            console.print(f"  [dim]'{raw}' → '{normalized}'[/dim]")
     
     # Validar nombres de componentes
     for component in components:
-        validate_component_name(component)
+        try:
+            validate_component_name(component)
+        except ValidationError as e:
+            # Mejorar mensaje de error con el valor específico
+            console.print(f"[red]✗[/red] Componente inválido: '[bold]{component}[/bold]'")
+            console.print(f"[dim]{e.reason}[/dim]")
+            raise
     
     # Docker
     use_docker = Confirm.ask("¿Usa Docker?", default=True)

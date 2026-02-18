@@ -17,7 +17,7 @@ except ImportError:
 class Config:
     """Gestor de configuración del CLI"""
     
-    KEYRING_SERVICE = "gitlab-cicd-creator"
+    KEYRING_SERVICE = "hidraulik"
     KEYRING_TOKEN_KEY = "gitlab_token"
     
     def __init__(self, config_dir: Optional[str] = None):
@@ -30,7 +30,7 @@ class Config:
         if config_dir:
             self.config_dir = Path(config_dir)
         else:
-            self.config_dir = Path.home() / '.gitlab-cicd-creator'
+            self.config_dir = Path.home() / '.hidraulik'
         
         self.config_file = self.config_dir / 'config.json'
         self.config_data = {}

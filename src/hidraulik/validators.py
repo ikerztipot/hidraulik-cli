@@ -9,15 +9,22 @@ from typing import List
 from .exceptions import ValidationError
 
 
-def normalize_to_k8s_namespace(name: str) -> str:
+def normalize_k8s_label(name: str, default: str = 'default') -> str:
     """
-    Normaliza un nombre a formato válido para namespace de Kubernetes (RFC 1123)
+    Normaliza un nombre a formato válido para labels/nombres de Kubernetes (RFC 1123)
+    
+    Convierte cualquier string a un formato compatible con Kubernetes:
+    - Minúsculas
+    - Solo letras, números y guiones
+    - Sin guiones al inicio/final
+    - Máximo 63 caracteres
     
     Args:
         name: Nombre a normalizar
+        default: Valor por defecto si el nombre normalizado queda vacío
         
     Returns:
-        Nombre normalizado (lowercase, solo letras, números y guiones)
+        Nombre normalizado compatible con RFC 1123
     """
     # Convertir a minúsculas
     normalized = name.lower()
@@ -31,15 +38,28 @@ def normalize_to_k8s_namespace(name: str) -> str:
     # Eliminar guiones al inicio y final
     normalized = normalized.strip('-')
     
-    # Limitar a 63 caracteres
+    # Limitar a 63 caracteres (máximo de RFC 1123)
     if len(normalized) > 63:
         normalized = normalized[:63].rstrip('-')
     
     # Si queda vacío, usar default
     if not normalized:
-        normalized = 'default'
+        normalized = default
     
     return normalized
+
+
+def normalize_to_k8s_namespace(name: str) -> str:
+    """
+    Normaliza un nombre a formato válido para namespace de Kubernetes
+    
+    Args:
+        name: Nombre a normalizar
+        
+    Returns:
+        Nombre normalizado (lowercase, solo letras, números y guiones)
+    """
+    return normalize_k8s_label(name, default='default')
 
 
 def validate_k8s_namespace(namespace: str) -> bool:
@@ -204,6 +224,19 @@ def validate_component_name(component: str) -> bool:
         )
     
     return True
+
+
+def normalize_component_name(name: str) -> str:
+    """
+    Normaliza un nombre a formato válido para componente
+    
+    Args:
+        name: Nombre a normalizar
+        
+    Returns:
+        Nombre normalizado (lowercase, solo letras, números y guiones)
+    """
+    return normalize_k8s_label(name, default='app')
 
 
 def sanitize_file_path(file_path: str) -> str:
