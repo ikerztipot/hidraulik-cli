@@ -114,7 +114,7 @@ hidraulik init
 ```
 
 El CLI solicitará:
-- **URL de GitLab**: `https://gitlab.workoholics.es`
+- **URL de GitLab**: `https://gitlab.es`
 - **Token**: `glpat-xxxxxxxxxxxx` (almacenado de forma segura en keyring)
 - **Repositorio de plantillas**: `clients/internal-infrastructure/cicd-templates`
 
@@ -210,7 +210,7 @@ hidraulik create PROJECT_PATH --namespace NAMESPACE [OPTIONS]
 
 **Ejemplo:**
 ```bash
-hidraulik create clients/workoholics/backend \\
+hidraulik create clients/pruebas/backend \\
   --namespace wkhs-api \\
   --environments staging,production \\
   --create-project
@@ -746,10 +746,7 @@ MIT License - Ver [LICENSE](LICENSE)
 ## 📮 Soporte
 
 - **Issues**: [GitHub Issues](https://github.com/ikerztipot/hidraulik/issues)
-- **Email**: soporte@workoholics.es
+- **Email**: devops@workoholics.es
 
 ---
 
-**Made with ❤️ for DevOps by Workoholics**
-
-*Automatiza tu infraestructura, libera tu tiempo* 🚀
