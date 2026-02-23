@@ -116,7 +116,7 @@ class VariableService:
                     protected=False,
                     masked=False,
                     environment_scope='*',
-                    raw=False  # Permitir expansión de variables
+                    raw=True
                 )
                 count += 1
         
@@ -130,7 +130,7 @@ class VariableService:
                     protected=False,
                     masked=True,
                     environment_scope='*',
-                    raw=False  # Permitir expansión de variables
+                    raw=True
                 )
                 count += 1
         
