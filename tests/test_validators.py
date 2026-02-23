@@ -330,3 +330,80 @@ class TestSanitizeFilePath:
 class TestEnvironmentNameValidation:
     """Tests para validación de nombres de entornos"""
     pass  # Función no existe en código actual
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# normalize_k8s_label / normalize_to_k8s_namespace – líneas sin cobertura
+# ─────────────────────────────────────────────────────────────────────────────
+
+from hidraulik.validators import normalize_k8s_label, normalize_to_k8s_namespace
+
+
+class TestNormalizeK8sLabel:
+    def test_truncates_long_name(self):
+        """Nombres > 63 chars se truncan"""
+        long_name = 'a' * 70
+        result = normalize_k8s_label(long_name)
+        assert len(result) <= 63
+
+    def test_empty_string_returns_default(self):
+        """Cadena vacía retorna el default"""
+        result = normalize_k8s_label('', default='fallback')
+        assert result == 'fallback'
+
+    def test_all_special_chars_returns_default(self):
+        """Solo chars especiales retorna default"""
+        result = normalize_k8s_label('!!!---', default='safe')
+        assert result == 'safe'
+
+
+class TestNormalizeToK8sNamespace:
+    def test_basic_normalization(self):
+        result = normalize_to_k8s_namespace('My_App Name')
+        assert result.islower()
+        assert ' ' not in result
+        assert '_' not in result
+
+    def test_empty_returns_default(self):
+        result = normalize_to_k8s_namespace('')
+        assert result == 'default'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# validate_project_path – slash doble (//), slash inicial/final
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestProjectPathEdgeCases:
+    def test_double_slash_raises(self):
+        with pytest.raises(ValidationError):
+            validate_project_path('grupo//proyecto')
+
+    def test_leading_slash_raises(self):
+        with pytest.raises(ValidationError):
+            validate_project_path('/grupo/proyecto')
+
+    def test_trailing_slash_raises(self):
+        with pytest.raises(ValidationError):
+            validate_project_path('grupo/proyecto/')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# validate_variable_name / validate_component_name / sanitize_file_path – vacíos
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestValidateVariableNameEdge:
+    def test_empty_raises(self):
+        with pytest.raises(ValidationError):
+            validate_variable_name('')
+
+
+class TestValidateComponentNameEdge:
+    def test_empty_raises(self):
+        with pytest.raises(ValidationError):
+            validate_component_name('')
+
+
+class TestSanitizeFilePathEdge:
+    def test_empty_raises(self):
+        with pytest.raises(ValidationError):
+            sanitize_file_path('')

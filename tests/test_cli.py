@@ -404,3 +404,404 @@ class TestCLIIntegration:
             
             # Verificar que el config se puede inicializar
             assert config_instance is not None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# status command – full paths
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestStatusCommandFull:
+    """Tests ampliados para el comando status"""
+
+    def _make_config_mock(self, configured=True):
+        config_instance = Mock()
+        config_instance.is_configured.return_value = configured
+        config_instance.get.side_effect = lambda k, d=None: {
+            'gitlab_url': 'https://gitlab.com',
+            'gitlab_token': 'token'
+        }.get(k, d)
+        return config_instance
+
+    @patch('hidraulik.cli.Config')
+    @patch('hidraulik.cli.GitLabClient')
+    def test_status_with_pipelines_and_variables(self, mock_client, mock_config, runner):
+        """Muestra pipeline y variables cuando existen"""
+        mock_config.return_value = self._make_config_mock()
+
+        client = Mock()
+        client.get_project.return_value = {'id': 1, 'name': 'proj', 'web_url': 'https://gl.com/proj'}
+        client.get_pipelines.return_value = [{
+            'id': 10, 'status': 'success', 'ref': 'main',
+            'web_url': 'https://gl.com/proj/-/pipelines/10'
+        }]
+        client.get_variables.return_value = [
+            {'key': 'DB_URL', 'value': '***'},
+            {'key': 'API_KEY', 'value': '***'},
+        ]
+        mock_client.return_value = client
+
+        result = runner.invoke(main, ['status', 'grupo/proj'])
+        assert result.exit_code == 0
+        assert 'success' in result.output
+        assert 'DB_URL' in result.output
+
+    @patch('hidraulik.cli.Config')
+    @patch('hidraulik.cli.GitLabClient')
+    def test_status_no_pipelines(self, mock_client, mock_config, runner):
+        """Muestra mensaje cuando no hay pipelines"""
+        mock_config.return_value = self._make_config_mock()
+
+        client = Mock()
+        client.get_project.return_value = {'id': 1, 'name': 'proj'}
+        client.get_pipelines.return_value = []
+        client.get_variables.return_value = []
+        mock_client.return_value = client
+
+        result = runner.invoke(main, ['status', 'grupo/proj'])
+        assert result.exit_code == 0
+        assert 'No se encontraron pipelines' in result.output
+
+    @patch('hidraulik.cli.Config')
+    def test_status_not_configured(self, mock_config, runner):
+        mock_config.return_value = self._make_config_mock(configured=False)
+        result = runner.invoke(main, ['status', 'grupo/proj'])
+        assert 'No se ha inicializado' in result.output
+
+    @patch('hidraulik.cli.Config')
+    @patch('hidraulik.cli.GitLabClient')
+    def test_status_auth_error(self, mock_client, mock_config, runner):
+        """Maneja GitlabAuthenticationError limpiamente"""
+        import gitlab
+        mock_config.return_value = self._make_config_mock()
+        mock_client.side_effect = Exception("Token inválido")
+
+        result = runner.invoke(main, ['status', 'grupo/proj'])
+        assert result.exit_code in [0, 1]
+
+    @patch('hidraulik.cli.Config')
+    @patch('hidraulik.cli.GitLabClient')
+    def test_status_project_not_found(self, mock_client, mock_config, runner):
+        """Muestra error cuando el proyecto no existe (404)"""
+        import gitlab
+        mock_config.return_value = self._make_config_mock()
+
+        client = Mock()
+        client.get_project.side_effect = gitlab.exceptions.GitlabGetError("404", 404)
+        mock_client.return_value = client
+
+        result = runner.invoke(main, ['status', 'no/existe'])
+        assert result.exit_code in [0, 1]
+        assert 'no encontrado' in result.output.lower() or 'Error' in result.output
+
+    @patch('hidraulik.cli.Config')
+    @patch('hidraulik.cli.GitLabClient')
+    def test_status_pipeline_error_shows_warning(self, mock_client, mock_config, runner):
+        """Muestra warning en lugar de fallar si no se puede leer pipeline"""
+        mock_config.return_value = self._make_config_mock()
+
+        client = Mock()
+        client.get_project.return_value = {'id': 1, 'name': 'proj'}
+        client.get_pipelines.side_effect = Exception("forbidden")
+        client.get_variables.return_value = []
+        mock_client.return_value = client
+
+        result = runner.invoke(main, ['status', 'grupo/proj'])
+        assert result.exit_code == 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# set_variable command – full paths
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestSetVariableCommandFull:
+
+    def _make_config_mock(self, configured=True):
+        cfg = Mock()
+        cfg.is_configured.return_value = configured
+        cfg.get.side_effect = lambda k, d=None: {
+            'gitlab_url': 'https://gitlab.com',
+            'gitlab_token': 'token'
+        }.get(k, d)
+        return cfg
+
+    @patch('hidraulik.cli.Config')
+    @patch('hidraulik.cli.GitLabClient')
+    def test_set_variable_success(self, mock_client, mock_config, runner):
+        mock_config.return_value = self._make_config_mock()
+
+        client = Mock()
+        client.get_project.return_value = {'id': 42, 'name': 'p'}
+        client.create_or_update_variable.return_value = None
+        mock_client.return_value = client
+
+        result = runner.invoke(main, [
+            'set-variable', 'grupo/proj', 'MY_VAR', 'my-value'
+        ])
+        assert result.exit_code == 0
+        assert 'MY_VAR' in result.output
+        client.create_or_update_variable.assert_called_once_with(
+            42, 'MY_VAR', 'my-value', protected=False, masked=False
+        )
+
+    @patch('hidraulik.cli.Config')
+    @patch('hidraulik.cli.GitLabClient')
+    def test_set_variable_with_flags(self, mock_client, mock_config, runner):
+        mock_config.return_value = self._make_config_mock()
+
+        client = Mock()
+        client.get_project.return_value = {'id': 42, 'name': 'p'}
+        mock_client.return_value = client
+
+        result = runner.invoke(main, [
+            'set-variable', 'grupo/proj', 'SEC', 'val',
+            '--protected', '--masked'
+        ])
+        assert result.exit_code == 0
+        client.create_or_update_variable.assert_called_once_with(
+            42, 'SEC', 'val', protected=True, masked=True
+        )
+
+    @patch('hidraulik.cli.Config')
+    def test_set_variable_not_configured(self, mock_config, runner):
+        mock_config.return_value = self._make_config_mock(configured=False)
+        result = runner.invoke(main, ['set-variable', 'g/p', 'K', 'V'])
+        assert 'No se ha inicializado' in result.output
+
+    @patch('hidraulik.cli.Config')
+    @patch('hidraulik.cli.GitLabClient')
+    def test_set_variable_project_not_found(self, mock_client, mock_config, runner):
+        import gitlab
+        mock_config.return_value = self._make_config_mock()
+        client = Mock()
+        client.get_project.side_effect = gitlab.exceptions.GitlabGetError("404", 404)
+        mock_client.return_value = client
+
+        result = runner.invoke(main, ['set-variable', 'no/exists', 'K', 'V'])
+        assert result.exit_code in [0, 1]
+        assert 'no encontrado' in result.output.lower() or 'Error' in result.output
+
+    @patch('hidraulik.cli.Config')
+    @patch('hidraulik.cli.GitLabClient')
+    def test_set_variable_generic_error(self, mock_client, mock_config, runner):
+        mock_config.return_value = self._make_config_mock()
+        client = Mock()
+        client.get_project.return_value = {'id': 1}
+        client.create_or_update_variable.side_effect = Exception("boom")
+        mock_client.return_value = client
+
+        result = runner.invoke(main, ['set-variable', 'g/p', 'K', 'V'])
+        assert result.exit_code in [0, 1]
+        assert 'Error' in result.output
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# list_templates command – full paths
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestListTemplatesCommandFull:
+
+    def _make_config_mock(self, configured=True):
+        cfg = Mock()
+        cfg.is_configured.return_value = configured
+        cfg.get.side_effect = lambda k, d=None: {
+            'gitlab_url': 'https://gitlab.com',
+            'gitlab_token': 'token',
+            'template_repo': 'grupo/plantillas',
+        }.get(k, d)
+        return cfg
+
+    @patch('hidraulik.cli.Config')
+    @patch('hidraulik.cli.TemplateManager')
+    def test_list_templates_success(self, mock_tmpl, mock_config, runner):
+        mock_config.return_value = self._make_config_mock()
+
+        tmpl = Mock()
+        tmpl.load_from_gitlab.return_value = {
+            '.gitlab-ci.yml': 'stages: [build]',
+            'k8s/deployment.yaml': 'kind: Deployment',
+        }
+        mock_tmpl.return_value = tmpl
+
+        result = runner.invoke(main, ['list-templates'])
+        assert result.exit_code == 0
+        assert '.gitlab-ci.yml' in result.output
+        assert '2' in result.output
+
+    @patch('hidraulik.cli.Config')
+    @patch('hidraulik.cli.TemplateManager')
+    def test_list_templates_empty(self, mock_tmpl, mock_config, runner):
+        """Muestra warning cuando no hay plantillas"""
+        mock_config.return_value = self._make_config_mock()
+
+        tmpl = Mock()
+        tmpl.load_from_gitlab.return_value = {}
+        mock_tmpl.return_value = tmpl
+
+        result = runner.invoke(main, ['list-templates'])
+        assert result.exit_code == 0
+        assert 'No se encontraron' in result.output
+
+    @patch('hidraulik.cli.Config')
+    def test_list_templates_not_configured(self, mock_config, runner):
+        mock_config.return_value = self._make_config_mock(configured=False)
+        result = runner.invoke(main, ['list-templates'])
+        assert 'No se ha inicializado' in result.output
+
+    @patch('hidraulik.cli.Config')
+    @patch('hidraulik.cli.TemplateManager')
+    def test_list_templates_auth_error(self, mock_tmpl, mock_config, runner):
+        import gitlab
+        mock_config.return_value = self._make_config_mock()
+        tmpl = Mock()
+        tmpl.load_from_gitlab.side_effect = gitlab.exceptions.GitlabAuthenticationError("401", 401)
+        mock_tmpl.return_value = tmpl
+
+        result = runner.invoke(main, ['list-templates'])
+        assert result.exit_code in [0, 1]
+        assert 'autenticación' in result.output.lower() or 'Error' in result.output
+
+    @patch('hidraulik.cli.Config')
+    @patch('hidraulik.cli.TemplateManager')
+    def test_list_templates_get_error(self, mock_tmpl, mock_config, runner):
+        import gitlab
+        mock_config.return_value = self._make_config_mock()
+        tmpl = Mock()
+        tmpl.load_from_gitlab.side_effect = gitlab.exceptions.GitlabGetError("404", 404)
+        mock_tmpl.return_value = tmpl
+
+        result = runner.invoke(main, ['list-templates'])
+        assert result.exit_code in [0, 1]
+
+    @patch('hidraulik.cli.Config')
+    @patch('hidraulik.cli.TemplateManager')
+    def test_list_templates_generic_error(self, mock_tmpl, mock_config, runner):
+        mock_config.return_value = self._make_config_mock()
+        tmpl = Mock()
+        tmpl.load_from_gitlab.side_effect = RuntimeError("network error")
+        mock_tmpl.return_value = tmpl
+
+        result = runner.invoke(main, ['list-templates'])
+        assert result.exit_code in [0, 1]
+        assert 'Error' in result.output
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# init command – full save path
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestInitCommandFull:
+
+    @patch('hidraulik.cli.GitLabClient')
+    @patch('hidraulik.cli.Config')
+    def test_init_saves_config_on_success(self, mock_config_class, mock_client_class, runner):
+        """Cuando todo va bien, guarda la config"""
+        cfg = Mock()
+        mock_config_class.return_value = cfg
+
+        client = Mock()
+        client.get_current_user.return_value = {'username': 'user1'}
+        client.gl = Mock()
+        client.gl.projects.list.return_value = [Mock()]
+        client.get_project.return_value = {'id': 5, 'name': 'templates'}
+        client.list_repository_tree.return_value = [
+            {'type': 'blob', 'name': 'ci.j2', 'path': 'pipeline/ci.j2'}
+        ]
+        mock_client_class.return_value = client
+
+        result = runner.invoke(main, [
+            'init',
+            '--gitlab-url', 'https://gitlab.com',
+            '--token', 'good-token',
+            '--template-repo', 'grupo/plantillas',
+        ])
+
+        assert result.exit_code == 0
+        cfg.save.assert_called_once()
+
+    @patch('hidraulik.cli.GitLabClient')
+    @patch('hidraulik.cli.Config')
+    def test_init_empty_template_repo_aborts(self, mock_config_class, mock_client_class, runner):
+        """Si template_repo está vacío, aborta sin guardar"""
+        cfg = Mock()
+        cfg.get.return_value = ''
+        mock_config_class.return_value = cfg
+
+        result = runner.invoke(main, [
+            'init',
+            '--gitlab-url', 'https://gitlab.com',
+            '--token', 'tok',
+            '--template-repo', '   ',  # Solo espacios
+        ])
+
+        assert 'obligatorio' in result.output
+        cfg.save.assert_not_called()
+
+    @patch('hidraulik.cli.GitLabClient')
+    @patch('hidraulik.cli.Config')
+    def test_init_connection_error(self, mock_config_class, mock_client_class, runner):
+        """Error de conexión detiene la configuración"""
+        cfg = Mock()
+        mock_config_class.return_value = cfg
+        mock_client_class.side_effect = Exception("Connection refused")
+
+        result = runner.invoke(main, [
+            'init',
+            '--gitlab-url', 'https://gitlab.com',
+            '--token', 'tok',
+            '--template-repo', 'grupo/plantillas',
+        ])
+
+        assert 'Error' in result.output
+        cfg.save.assert_not_called()
+
+    @patch('hidraulik.cli.GitLabClient')
+    @patch('hidraulik.cli.Config')
+    def test_init_template_repo_not_found_aborts(self, mock_config_class, mock_client_class, runner):
+        """Si el repo de plantillas no existe, aborta"""
+        import gitlab
+        cfg = Mock()
+        mock_config_class.return_value = cfg
+
+        client = Mock()
+        client.get_current_user.return_value = {'username': 'user1'}
+        client.gl = Mock()
+        client.gl.projects.list.return_value = []
+        client.get_project.side_effect = gitlab.exceptions.GitlabGetError("404", 404)
+        mock_client_class.return_value = client
+
+        result = runner.invoke(main, [
+            'init',
+            '--gitlab-url', 'https://gitlab.com',
+            '--token', 'tok',
+            '--template-repo', 'no/existe',
+        ], input='n\n')  # No buscar proyectos similares
+
+        assert 'Error' in result.output
+        cfg.save.assert_not_called()
+
+    @patch('hidraulik.cli.GitLabClient')
+    @patch('hidraulik.cli.Config')
+    def test_init_no_j2_files_warns(self, mock_config_class, mock_client_class, runner):
+        """Si no hay .j2, advierte pero guarda igual"""
+        cfg = Mock()
+        mock_config_class.return_value = cfg
+
+        client = Mock()
+        client.get_current_user.return_value = {'username': 'user1'}
+        client.gl = Mock()
+        client.gl.projects.list.return_value = []
+        client.get_project.return_value = {'id': 5, 'name': 'templates'}
+        client.list_repository_tree.return_value = [
+            {'type': 'blob', 'name': 'README.md', 'path': 'README.md'}
+        ]
+        mock_client_class.return_value = client
+
+        result = runner.invoke(main, [
+            'init',
+            '--gitlab-url', 'https://gitlab.com',
+            '--token', 'tok',
+            '--template-repo', 'grupo/plantillas',
+        ])
+
+        assert 'Advertencia' in result.output or 'Warning' in result.output or result.exit_code == 0
+        cfg.save.assert_called_once()

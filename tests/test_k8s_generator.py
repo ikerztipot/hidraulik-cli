@@ -172,3 +172,18 @@ def test_process_templates_without_preserve():
     # Todas las variables deben estar sustituidas
     assert 'app: my-app' in result['config.yaml']
     assert 'key: secret123' in result['config.yaml']
+
+
+def test_process_templates_error_falls_back_to_original():
+    """Test que si Jinja2 falla al renderizar, retorna el contenido original"""
+    generator = K8sGenerator()
+
+    # Una plantilla con sintaxis Jinja2 inválida
+    invalid_template = '{% invalid block %}'
+    templates = {'broken.yaml': invalid_template}
+
+    result = generator.process_templates(templates, {})
+
+    # Debe retornar el contenido original sin lanzar excepción
+    assert 'broken.yaml' in result
+    assert result['broken.yaml'] == invalid_template

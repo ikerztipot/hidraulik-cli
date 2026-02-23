@@ -85,3 +85,158 @@ def test_config_get_with_default(temp_config_dir):
     """Test de obtención con valor por defecto"""
     config = Config(config_dir=temp_config_dir)
     assert config.get('nonexistent', 'default') == 'default'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Token seguro – keyring disponible
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_save_token_secure_with_keyring(temp_config_dir):
+    """Test que guarda el token en keyring cuando está disponible"""
+    import unittest.mock as mock
+
+    with mock.patch('hidraulik.config.KEYRING_AVAILABLE', True):
+        with mock.patch('hidraulik.config.keyring') as mock_keyring:
+            config = Config(config_dir=temp_config_dir)
+            config.set('gitlab_url', 'https://gitlab.com')
+            config.set('gitlab_token', 'my-token')
+            config.set('template_repo', 'g/t')
+            config.save()
+
+            mock_keyring.set_password.assert_called_once_with(
+                Config.KEYRING_SERVICE, Config.KEYRING_TOKEN_KEY, 'my-token'
+            )
+
+
+def test_get_token_secure_from_keyring(temp_config_dir):
+    """Test que obtiene el token desde keyring cuando está disponible"""
+    import unittest.mock as mock
+
+    with mock.patch('hidraulik.config.KEYRING_AVAILABLE', True):
+        with mock.patch('hidraulik.config.keyring') as mock_keyring:
+            mock_keyring.get_password.return_value = 'keyring-token'
+            config = Config(config_dir=temp_config_dir)
+            token = config.get('gitlab_token')
+            assert token == 'keyring-token'
+
+
+def test_get_token_secure_keyring_none_falls_to_file(temp_config_dir):
+    """Test que si keyring retorna None, usa el archivo fallback"""
+    import unittest.mock as mock
+
+    with mock.patch('hidraulik.config.KEYRING_AVAILABLE', True):
+        with mock.patch('hidraulik.config.keyring') as mock_keyring:
+            mock_keyring.get_password.return_value = None
+
+            # Crear archivo de token fallback
+            token_file = Path(temp_config_dir) / '.token'
+            token_file.write_text('file-token')
+
+            config = Config(config_dir=temp_config_dir)
+            token = config.get('gitlab_token')
+            assert token == 'file-token'
+
+
+def test_save_token_secure_keyring_fails_fallback(temp_config_dir):
+    """Test que si keyring.set_password falla, usa archivo fallback"""
+    import unittest.mock as mock
+
+    with mock.patch('hidraulik.config.KEYRING_AVAILABLE', True):
+        with mock.patch('hidraulik.config.keyring') as mock_keyring:
+            mock_keyring.set_password.side_effect = Exception("keyring unavailable")
+
+            config = Config(config_dir=temp_config_dir)
+            config.set('gitlab_url', 'https://gitlab.com')
+            config.set('gitlab_token', 'fallback-token')
+            config.set('template_repo', 'g/t')
+            config.save()
+
+            # El token debe haberse guardado en el archivo
+            token_file = Path(temp_config_dir) / '.token'
+            assert token_file.exists()
+            assert token_file.read_text() == 'fallback-token'
+
+
+def test_clear_removes_keyring_token(temp_config_dir):
+    """Test que clear elimina el token del keyring"""
+    import unittest.mock as mock
+
+    with mock.patch('hidraulik.config.KEYRING_AVAILABLE', True):
+        with mock.patch('hidraulik.config.keyring') as mock_keyring:
+            config = Config(config_dir=temp_config_dir)
+            config.set('test', 'val')
+            config.save()
+            config.clear()
+
+            mock_keyring.delete_password.assert_called_once()
+
+
+def test_clear_keyring_delete_exception_ignored(temp_config_dir):
+    """Test que clear no falla si delete_password lanza excepción"""
+    import unittest.mock as mock
+
+    with mock.patch('hidraulik.config.KEYRING_AVAILABLE', True):
+        with mock.patch('hidraulik.config.keyring') as mock_keyring:
+            mock_keyring.delete_password.side_effect = Exception("not found")
+            config = Config(config_dir=temp_config_dir)
+            config.clear()  # No debe lanzar excepción
+
+
+def test_delete_nonexistent_key_no_error(temp_config_dir):
+    """Test que delete de una clave inexistente no lanza error"""
+    config = Config(config_dir=temp_config_dir)
+    config.delete('key_that_does_not_exist')  # No debe lanzar
+
+
+def test_config_token_not_saved_in_json(temp_config_dir):
+    """Test que el token no se guarda en el JSON del archivo"""
+    config = Config(config_dir=temp_config_dir)
+    config.set('gitlab_url', 'https://gitlab.com')
+    config.set('gitlab_token', 'secret-token')
+    config.set('template_repo', 'g/t')
+    config.save()
+
+    import json
+    with open(config.config_file) as f:
+        data = json.load(f)
+    assert 'gitlab_token' not in data
+
+
+def test_get_token_returns_default_when_no_token(temp_config_dir):
+    """Test que get('gitlab_token') retorna default cuando no hay token guardado"""
+    import unittest.mock as mock
+
+    with mock.patch('hidraulik.config.KEYRING_AVAILABLE', True):
+        with mock.patch('hidraulik.config.keyring') as mock_keyring:
+            mock_keyring.get_password.return_value = None  # Sin token en keyring
+            config = Config(config_dir=temp_config_dir)
+            result = config.get('gitlab_token', 'my-default')
+            assert result == 'my-default'
+
+
+def test_get_token_secure_keyring_exception_falls_to_file(temp_config_dir):
+    """Test que si keyring.get_password lanza excepción, usa el archivo"""
+    import unittest.mock as mock
+
+    # Crear archivo de token fallback
+    token_file = Path(temp_config_dir) / '.token'
+    token_file.write_text('file-token')
+
+    with mock.patch('hidraulik.config.KEYRING_AVAILABLE', True):
+        with mock.patch('hidraulik.config.keyring') as mock_keyring:
+            mock_keyring.get_password.side_effect = Exception("keyring backend error")
+
+            config = Config(config_dir=temp_config_dir)
+            token = config.get('gitlab_token')
+            assert token == 'file-token'
+
+
+def test_clear_removes_token_file(temp_config_dir):
+    """Test que clear elimina el archivo .token si existe"""
+    token_file = Path(temp_config_dir) / '.token'
+    token_file.write_text('my-secret-token')
+
+    config = Config(config_dir=temp_config_dir)
+    config.clear()
+
+    assert not token_file.exists()
