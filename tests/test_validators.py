@@ -78,7 +78,7 @@ class TestProjectPathValidation:
         valid_paths = [
             'grupo/proyecto',
             'grupo/subgrupo/proyecto',
-            'clients/internal-infrastructure/cicd-templates',
+            'my-group/cicd-templates',
             'org/team/app/backend',
             'test-group/my-project-123'
         ]

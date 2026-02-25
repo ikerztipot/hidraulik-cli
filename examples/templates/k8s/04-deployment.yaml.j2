@@ -90,7 +90,7 @@ spec:
             {%- endfor %}
           {%- endif %}
       imagePullSecrets:
-        - name: registry-workoholics
+        - name: registry-mycompany
       {%- if 'pvc' in k8s_manifests.get(component, []) and pvc_volumes.get(component) %}
       volumes:
         {%- for volume in pvc_volumes.get(component, []) %}

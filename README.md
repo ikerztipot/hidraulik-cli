@@ -114,9 +114,9 @@ hidraulik init
 ```
 
 El CLI solicitará:
-- **URL de GitLab**: `https://gitlab.es`
+- **URL de GitLab**: `https://gitlab.example.com`
 - **Token**: `glpat-xxxxxxxxxxxx` (almacenado de forma segura en keyring)
-- **Repositorio de plantillas**: `clients/internal-infrastructure/cicd-templates`
+- **Repositorio de plantillas**: `my-group/cicd-templates`
 
 **Almacenamiento:**
 - Config: `~/.hidraulik/config.json` (sin token)
@@ -464,7 +464,7 @@ from hidraulik.validators import (
 ### Estructura Requerida
 
 ```
-clients/internal-infrastructure/cicd-templates/
+my-group/cicd-templates/
 │
 ├── pipeline/                    # CI/CD (procesados Jinja2)
 │   └── .gitlab-ci.yml.j2
@@ -746,7 +746,7 @@ MIT License - Ver [LICENSE](LICENSE)
 ## 📮 Soporte
 
 - **Issues**: [GitHub Issues](https://github.com/ikerztipot/hidraulik/issues)
-- **Email**: devops@workoholics.es
+- **Email**: devops@example.com
 
 ---
 
