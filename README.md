@@ -6,30 +6,29 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-## 🚀 Características Principales
+## Características
 
-### Automatización Inteligente
-- ✅ **Cero Configuración Manual**: Genera pipelines completos con una sola línea
-- ✅ **Detección Automática de Runners**: Obtiene runners disponibles desde GitLab API
-- ✅ **Descubrimiento de Clusters K8s**: Encuentra GitLab Kubernetes Agents en grupos padres
-- ✅ **Plantillas Jinja2**: Sistema flexible desde repositorios remotos de GitLab
-- ✅ **Validación Robusta**: Valida inputs antes de comunicarse con GitLab
+### Automatización del flujo CI/CD
+- Generación de pipelines completos a partir de plantillas Jinja2 almacenadas en un repositorio GitLab remoto
+- Descubrimiento automático de runners disponibles mediante la API de GitLab (instancia, grupo y proyecto)
+- Detección de GitLab Kubernetes Agents en la jerarquía de grupos del proyecto destino
+- Validación de entradas previo a cualquier comunicación con la API de GitLab
 
-### Seguridad y Confiabilidad
-- 🔒 **Almacenamiento Seguro**: Tokens en keyring del sistema (macOS/Linux/Windows)
-- 🔒 **Variables Protegidas**: Soporte para variables enmascaradas y protegidas
-- 📝 **Logging Estructurado**: Logs rotatorios con niveles configurables
-- ⚠️ **Manejo de Errores**: Excepciones específicas con contexto completo
+### Seguridad
+- Almacenamiento de tokens mediante el keyring del sistema operativo (macOS Keychain, GNOME Keyring, Windows Credential Manager)
+- Soporte para variables CI/CD enmascaradas y protegidas por entorno
+- Logging estructurado con rotación de archivos y niveles configurables
+- Jerarquía de excepciones específica con contexto de error completo
 
-### Arquitectura Limpia
-- 🏗️ **Capa de Servicios**: Separación de responsabilidades (VariableService, RunnerService, K8sConfigService)
-- 🧪 **Alta Cobertura de Tests**: Suite completa con pytest
-- 📦 **Código Modular**: Validadores, excepciones y utilidades separadas
-- 📖 **Documentación Completa**: Guías de uso y desarrollo
+### Diseño de software
+- Arquitectura por capas: CLI, servicios, cliente GitLab, procesamiento de plantillas y validación
+- Separación de responsabilidades mediante servicios independientes (VariableService, RunnerService, K8sConfigService)
+- Suite de tests con pytest y cobertura de código reportada
+- Validadores reutilizables para namespace RFC 1123, rutas de proyecto, puertos y nombres de variables
 
 ---
 
-## 📋 Tabla de Contenidos
+## Tabla de Contenidos
 
 - [Requisitos](#-requisitos)
 - [Instalación](#-instalación)
@@ -44,7 +43,7 @@
 
 ---
 
-## 📋 Requisitos
+## Requisitos
 
 ### Sistema
 - **Python 3.8+** (requerido)
@@ -61,9 +60,9 @@
 
 ---
 
-## 🔧 Instalación
+## Instalación
 
-### Instalación Automática (Recomendada)
+### Instalación automática
 
 ```bash
 # Clonar repositorio
@@ -74,21 +73,17 @@ cd hidraulik
 ./install.sh
 ```
 
-El instalador detecta automáticamente:
-- ✓ Python y versión requerida
-- ✓ Instala con `pipx` (aislado) o `pip` (usuario)
-- ✓ Configura PATH si es necesario
-- ✓ Verifica dependencias del sistema (keyring)
+El instalador detecta automáticamente la versión de Python disponible, instala mediante `pipx` (entorno aislado) o `pip --user` según corresponda, y configura el PATH si es necesario.
 
-**Nota:** Cierra y abre tu terminal después de la instalación.
+> Reinicia el terminal tras la instalación para que los cambios de PATH surtan efecto.
 
-### Instalación Manual
+### Instalación manual
 
 ```bash
-# Con pipx (aislado, recomendado)
+# Con pipx (entorno aislado)
 pipx install .
 
-# Con pip (usuario)
+# Con pip
 pip install --user .
 
 # Verificar instalación
@@ -105,9 +100,9 @@ Elimina el CLI y opcionalmente la configuración en `~/.hidraulik/`.
 
 ---
 
-## ⚡ Inicio Rápido
+## Inicio Rápido
 
-### 1. Configurar Credenciales
+### 1. Configurar credenciales
 
 ```bash
 hidraulik init
@@ -123,7 +118,7 @@ El CLI solicitará:
 - Token: Keyring del sistema (seguro) o fallback `~/.hidraulik/.token` (permisos 0o600)
 - Logs: `~/.hidraulik/logs/` (rotación 10MB, 5 archivos)
 
-### 2. Crear CI/CD para un Proyecto
+### 2. Crear configuración CI/CD
 
 ```bash
 hidraulik create clients/acme/mi-app \\
@@ -132,45 +127,32 @@ hidraulik create clients/acme/mi-app \\
   --create-project
 ```
 
-**El CLI ejecutará automáticamente:**
+El CLI ejecuta los siguientes pasos de forma automatizada:
 
-1. **Conexión**
-   - Valida credenciales con GitLab
-   - Crea proyecto si no existe
+1. **Conexión**: valida credenciales contra la API de GitLab y crea el proyecto si no existe.
 
-2. **Descubrimiento**
-   - Busca Kubernetes Agents en grupos padres
-   - Obtiene runners disponibles (instancia + grupo + proyecto)
+2. **Descubrimiento de recursos**: obtiene los runners disponibles (instancia, grupo y proyecto) y busca GitLab Kubernetes Agents en los grupos padres.
 
-3. **Configuración Interactiva**
-   - Componentes (ej: `web`, `api`, `cms`)
-   - Docker (Dockerfiles y puertos)
-   - Runner (desde lista con tags)
-   - Perfiles K8s (xsmall → xlarge)
-   - Clusters por entorno
+3. **Configuración interactiva**: solicita al usuario los componentes de la aplicación, rutas a Dockerfiles, runner a utilizar, perfil de recursos K8s (xsmall → xlarge) y cluster por entorno.
 
-4. **Generación**
-   - Procesa plantillas Jinja2
-   - Genera manifiestos K8s
-   - Commitea archivos
-   - Configura variables CI/CD
+4. **Generación y commit**: procesa las plantillas Jinja2, genera los manifiestos K8s y el fichero `.gitlab-ci.yml`, los commitea al repositorio y configura las variables CI/CD en GitLab.
 
-### 3. Verificar
+### 3. Verificar el resultado
 
 ```bash
-# Ver estado
+# Ver estado del proyecto
 hidraulik status clients/acme/mi-app
 
-# Listar plantillas
+# Listar plantillas disponibles
 hidraulik list-templates
 
-# Añadir variable
+# Añadir una variable CI/CD
 hidraulik set-variable clients/acme/mi-app API_KEY "secreto" --masked --protected
 ```
 
 ---
 
-## 📚 Comandos
+## Comandos
 
 ### `init` - Configuración Inicial
 
@@ -210,8 +192,8 @@ hidraulik create PROJECT_PATH --namespace NAMESPACE [OPTIONS]
 
 **Ejemplo:**
 ```bash
-hidraulik create clients/pruebas/backend \\
-  --namespace wkhs-api \\
+hidraulik create clients/acme/backend \\
+  --namespace acme-backend \\
   --environments staging,production \\
   --create-project
 ```
@@ -223,10 +205,10 @@ hidraulik create clients/pruebas/backend \\
 Descubriendo recursos GitLab...
 ✓ 5 runner(s) disponible(s)
 ✓ 4 cluster(s) encontrado(s):
-  1. clients/infrastructure:k3s-slots-caprabo
-  2. clients/infrastructure:scaleway-worko-pre
-  3. clients/infrastructure:scaleway-worko-prod
-  4. clients/infrastructure:scaleway-basquetour
+  1. my-group/infrastructure:k3s-production
+  2. my-group/infrastructure:k8s-staging
+  3. my-group/infrastructure:k8s-production
+  4. my-group/infrastructure:k8s-dr
 
 Componentes: api,worker
 ¿Usa Docker? [y/n]: y
@@ -235,7 +217,7 @@ Puerto 'api' (80): 8000
   ✓ api: Dockerfile (puerto 8000)
 
 Selecciona runner (1-5): 2
-✓ Runner: gcp-docker (tags: docker, gcp)
+✓ Runner: docker-runner (tags: docker, linux)
 
 Cluster para staging (1-4) o Enter: 2
 Cluster para production (1-4) o Enter: 3
@@ -305,15 +287,15 @@ Muestra plantillas disponibles del repositorio configurado, organizadas por tipo
 
 ---
 
-## ⚙️ Configuración de GitLab
+## Configuración de GitLab
 
 ### 1. Token de Acceso Personal
 
 1. GitLab → **Preferences → Access Tokens**
-2. Crear token con permisos:
-   - ✅ `api`
-   - ✅ `read_repository`
-   - ✅ `write_repository`
+2. Crear token con los siguientes permisos:
+   - `api`
+   - `read_repository`
+   - `write_repository`
 3. Copiar token (`glpat-xxxxxxxxxxxx`)
 4. Usar en `hidraulik init`
 
@@ -326,10 +308,10 @@ Muestra plantillas disponibles del repositorio configurado, organizadas por tipo
 Operate → Kubernetes clusters → Connect a cluster (agent)
 ```
 
-**Nombres sugeridos:**
-- `scaleway-internal-worko-prod`
-- `k3s-slots-caprabo`
-- `gke-production-us`
+**Ejemplos de nombre:**
+- `k3s-production`
+- `k8s-staging`
+- `gke-production-eu`
 
 **Búsqueda automática del CLI:**
 1. Proyecto del repositorio de plantillas
@@ -350,18 +332,18 @@ El CLI descubre automáticamente:
 **Selección interactiva:**
 ```
 Runners disponibles:
-  1. ● gcp-ci-cd-gitlab-runner-docker
-     docker, gcp
-  2. ● Runner autoescalado cluster
-     buildkit, scaleway, worko-internal
+  1. ● docker-shared-runner
+     docker, linux
+  2. ● buildkit-runner
+     buildkit, linux
 
 Selecciona (1-2): 2
-✓ Tags: buildkit, scaleway, worko-internal
+✓ Tags: buildkit, linux
 ```
 
 ---
 
-## 🏗 Arquitectura del Proyecto
+## Arquitectura del Proyecto
 
 ### Estructura de Directorios
 
@@ -459,7 +441,7 @@ from hidraulik.validators import (
 
 ---
 
-## 📦 Repositorio de Plantillas
+## Repositorio de Plantillas
 
 ### Estructura Requerida
 
@@ -573,7 +555,7 @@ deploy-{{ component }}-{{ env }}:
 
 ---
 
-## 🔑 Variables y Seguridad
+## Variables y Seguridad
 
 ### Tipos de Variables
 
@@ -649,7 +631,7 @@ Las variables `CICD_*` **NO** se sustituyen, se guardan en GitLab.
 
 ---
 
-## 🧪 Desarrollo
+## Desarrollo
 
 ### Setup
 
@@ -694,19 +676,19 @@ make all           # format + lint + test
 
 ---
 
-## 🤝 Contribuir
+## Contribuir
 
 ### Proceso
 
-1. Fork y clone
-2. Branch: `feature/mi-feature` o `fix/mi-bugfix`
-3. Desarrollar + formatear + tests
-4. Commit: [Conventional Commits](https://www.conventionalcommits.org/)
+1. Crear fork y clonar el repositorio
+2. Crear rama: `feature/nombre-funcionalidad` o `fix/nombre-bug`
+3. Implementar cambios, ejecutar formatter y tests
+4. Commits siguiendo [Conventional Commits](https://www.conventionalcommits.org/):
    ```bash
    git commit -m "feat: añadir soporte Helm"
    git commit -m "fix: corregir validación namespace"
    ```
-5. Push y Pull Request
+5. Push y abrir Pull Request
 
 ### Tipos de Commit
 
@@ -727,23 +709,25 @@ Issue con:
 
 ---
 
-## 📄 Licencia
+## Licencia
 
 MIT License - Ver [LICENSE](LICENSE)
 
 ---
 
-## 🙏 Agradecimientos
+## Dependencias
 
-- [python-gitlab](https://python-gitlab.readthedocs.io/) - Cliente GitLab API
-- [Click](https://click.palletsprojects.com/) - Framework CLI
-- [Rich](https://rich.readthedocs.io/) - Terminal UI
-- [Jinja2](https://jinja.palletsprojects.com/) - Motor de plantillas
-- [keyring](https://github.com/jaraco/keyring) - Almacenamiento seguro
+| Paquete | Descripción |
+|---|---|
+| [python-gitlab](https://python-gitlab.readthedocs.io/) | Cliente oficial para la API de GitLab |
+| [Click](https://click.palletsprojects.com/) | Framework para interfaces de línea de comandos |
+| [Rich](https://rich.readthedocs.io/) | Renderizado de texto enriquecido en terminal |
+| [Jinja2](https://jinja.palletsprojects.com/) | Motor de plantillas para la generación de ficheros |
+| [keyring](https://github.com/jaraco/keyring) | Almacenamiento seguro de credenciales en el SO |
 
 ---
 
-## 📮 Soporte
+## Soporte
 
 - **Issues**: [GitHub Issues](https://github.com/ikerztipot/hidraulik/issues)
 - **Email**: devops@example.com
