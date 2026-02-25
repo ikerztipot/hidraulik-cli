@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hidraulik"
-version = "0.3.0"
+version = "1.0.0"
 description = "CLI para generar CI/CD automáticamente en repositorios de GitLab para Kubernetes"
 readme = "README.md"
 requires-python = ">=3.8"

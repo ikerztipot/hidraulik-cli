@@ -7,25 +7,23 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-02-25
+
 ### Añadido
-- **Configuración de Docker por componente**: Ahora el CLI pregunta si el proyecto usa Docker
-- **Rutas de Dockerfile personalizadas**: Permite especificar la ruta del Dockerfile para cada componente
-- Nueva variable de plantilla `use_docker` (booleana) que indica si el proyecto usa Docker
-- Nueva variable de plantilla `dockerfile_paths` (diccionario) con rutas de Dockerfile por componente
-- Prompt interactivo para configurar Dockerfile path por cada componente con valores por defecto inteligentes
-  - Un componente: default `Dockerfile`
-  - Múltiples componentes: default `{component}/Dockerfile`
+- **Configuración de Docker por componente**: el CLI solicita si el proyecto usa Docker y la ruta de cada Dockerfile
+- Variables de plantilla `use_docker` y `dockerfile_paths` para soporte de builds condicionales
+- Detección automática de runners disponibles (instancia, grupo y proyecto) con selección interactiva
+- Variable de plantilla `components` para proyectos multi-componente
+- Descubrimiento automático de GitLab Kubernetes Agents en la jerarquía de grupos
 
 ### Mejorado
-- **Mensajes de error mejorados**: Ahora los errores de autenticación y otros errores comunes muestran mensajes claros con soluciones paso a paso en lugar de tracebacks técnicos
-- Documentación actualizada en README con las nuevas variables `use_docker` y `dockerfile_paths`
-- Ejemplos de plantillas actualizados para mostrar el uso condicional de `DOCKERFILE_PATH`
-- Flujo interactivo mejorado con preguntas sobre Docker antes de la selección de runners
+- Mensajes de error con contexto y soluciones sugeridas en lugar de tracebacks técnicos
+- Flujo interactivo reorganizado: configuración de Docker antes de la selección de runner
+- Almacenamiento seguro de tokens mediante keyring del sistema operativo
 
 ### Corregido
-- **Extensión .j2 en archivos generados**: Ahora los archivos procesados se guardan con su extensión correcta (`.gitlab-ci.yml` en lugar de `.gitlab-ci.yml.j2`)
-- Los archivos de plantilla del repositorio remoto ahora se mapean correctamente a sus rutas de destino sin la extensión `.j2`
-- **Error 409 al crear variables con múltiples scopes**: Mejorado el manejo de variables CI/CD cuando existen múltiples variables con el mismo nombre pero diferentes `environment_scope`. Ahora busca y actualiza correctamente la variable específica por scope.
+- Los archivos generados se guardan sin la extensión `.j2` (p.ej. `.gitlab-ci.yml`)
+- Manejo correcto de variables CI/CD con múltiples `environment_scope` (error 409)
 
 ## [0.4.0] - 2026-02-10
 
@@ -154,4 +152,5 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 - Configuración persistente
 - Interfaz de usuario rica con colores en terminal
 
+[1.0.0]: https://github.com/ikerztipot/hidraulik-cli/releases/tag/v1.0.0
 [0.1.0]: https://github.com/ikerztipot/hidraulik-cli/releases/tag/v0.1.0
