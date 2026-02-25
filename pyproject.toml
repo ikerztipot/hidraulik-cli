@@ -50,10 +50,10 @@ dev = [
 hidraulik = "hidraulik.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/ikerztipot/hidraulik"
-Documentation = "https://github.com/ikerztipot/hidraulik/blob/main/README.md"
-Repository = "https://github.com/ikerztipot/hidraulik"
-Issues = "https://github.com/ikerztipot/hidraulik/issues"
+Homepage = "https://github.com/ikerztipot/hidraulik-cli"
+Documentation = "https://github.com/ikerztipot/hidraulik-cli/blob/main/README.md"
+Repository = "https://github.com/ikerztipot/hidraulik-cli"
+Issues = "https://github.com/ikerztipot/hidraulik-cli/issues"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

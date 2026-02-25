@@ -66,8 +66,8 @@
 
 ```bash
 # Clonar repositorio
-git clone https://github.com/ikerztipot/hidraulik.git
-cd hidraulik
+git clone https://github.com/ikerztipot/hidraulik-cli.git
+cd hidraulik-cli
 
 # Ejecutar instalador
 ./install.sh
@@ -636,8 +636,8 @@ Las variables `CICD_*` **NO** se sustituyen, se guardan en GitLab.
 ### Setup
 
 ```bash
-git clone https://github.com/ikerztipot/hidraulik.git
-cd hidraulik
+git clone https://github.com/ikerztipot/hidraulik-cli.git
+cd hidraulik-cli
 
 python3 -m venv venv
 source venv/bin/activate
@@ -729,7 +729,7 @@ MIT License - Ver [LICENSE](LICENSE)
 
 ## Soporte
 
-- **Issues**: [GitHub Issues](https://github.com/ikerztipot/hidraulik/issues)
+- **Issues**: [GitHub Issues](https://github.com/ikerztipot/hidraulik-cli/issues)
 - **Email**: devops@example.com
 
 ---
